@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>实时监测 - AgriSense</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet" />
+  <link href="css/style.css" rel="stylesheet" />
+  <link href="css/layout.css" rel="stylesheet" />
+</head>
+<body>
+  <div id="app-root">
+
+    <!-- 实时仪表盘 -->
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-lg-3">
+        <div class="sensor-card soil-card text-center">
+          <div id="gauge-soil" style="height:180px;"></div>
+          <div class="card-label mt-1"><i class="bi bi-droplet-half"></i> 土壤墒情</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="sensor-card temp-card text-center">
+          <div id="gauge-temp" style="height:180px;"></div>
+          <div class="card-label mt-1"><i class="bi bi-thermometer-half"></i> 环境温度</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="sensor-card hum-card text-center">
+          <div id="gauge-hum" style="height:180px;"></div>
+          <div class="card-label mt-1"><i class="bi bi-cloud-haze"></i> 空气湿度</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="sensor-card light-card text-center">
+          <div id="gauge-light" style="height:180px;"></div>
+          <div class="card-label mt-1"><i class="bi bi-brightness-high"></i> 光照强度</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 实时数据流图 -->
+    <div class="sensor-card chart-card mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0"><i class="bi bi-activity"></i> 实时数据流（最近 30 个采样点）</h6>
+        <span class="badge bg-success"><i class="bi bi-broadcast"></i> 实时刷新中</span>
+      </div>
+      <div id="realtime-chart" style="height:300px;"></div>
+    </div>
+
+    <!-- 最近读数表 -->
+    <div class="sensor-card">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0"><i class="bi bi-table"></i> 最近采集记录</h6>
+        <small class="text-muted">每 5 秒自动刷新</small>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>时间</th>
+              <th>设备</th>
+              <th>土壤墒情</th>
+              <th>温度</th>
+              <th>湿度</th>
+              <th>光照(lux)</th>
+              <th>原始值</th>
+            </tr>
+          </thead>
+          <tbody id="realtime-table">
+            <tr><td colspan="7" class="text-center text-muted py-3">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>window.PAGE_CONFIG = { key: "realtime", title: "实时监测", icon: "bi-activity" };</script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/realtime.js"></script>
+  <script src="js/layout.js"></script>
+</body>
+</html>

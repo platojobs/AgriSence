@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>设备管理 - AgriSense</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet" />
+  <link href="css/style.css" rel="stylesheet" />
+  <link href="css/layout.css" rel="stylesheet" />
+</head>
+<body>
+  <div id="app-root">
+
+    <!-- 操作栏 -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h5 class="mb-0"><i class="bi bi-cpu"></i> 设备列表</h5>
+      <button class="btn btn-success" id="btn-add-device">
+        <i class="bi bi-plus-lg"></i> 新增设备
+      </button>
+    </div>
+
+    <!-- 设备表格 -->
+    <div class="sensor-card">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>设备名称</th>
+              <th>设备编号</th>
+              <th>安装位置</th>
+              <th>状态</th>
+              <th>最后上线</th>
+              <th class="text-end">操作</th>
+            </tr>
+          </thead>
+          <tbody id="devices-table">
+            <tr><td colspan="6" class="text-center text-muted py-3">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 新增/编辑设备弹窗 -->
+    <div class="modal fade" id="device-modal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="device-modal-title"><i class="bi bi-cpu"></i> 新增设备</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <form id="device-form">
+              <input type="hidden" id="f-device-id" />
+              <div class="mb-3">
+                <label class="form-label">设备编号 <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="f-device-code" placeholder="如 esp32_001" required />
+                <div class="form-text">设备唯一标识，新增后不可修改</div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">设备名称</label>
+                <input type="text" class="form-control" id="f-name" placeholder="如 一号棚监测节点" />
+              </div>
+              <div class="mb-3">
+                <label class="form-label">安装位置</label>
+                <input type="text" class="form-control" id="f-location" placeholder="如 A 区 3 号大棚" />
+              </div>
+              <div class="mb-3">
+                <label class="form-label">状态</label>
+                <select class="form-select" id="f-status">
+                  <option value="online">在线</option>
+                  <option value="offline">离线</option>
+                  <option value="maintenance">维护中</option>
+                </select>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            <button type="button" class="btn btn-success" id="btn-save-device">保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>window.PAGE_CONFIG = { key: "devices", title: "设备管理", icon: "bi-cpu" };</script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/devices.js"></script>
+  <script src="js/layout.js"></script>
+</body>
+</html>

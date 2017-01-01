@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>客服中心 - AgriSense</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet" />
+  <link href="css/style.css" rel="stylesheet" />
+  <link href="css/layout.css" rel="stylesheet" />
+  <style>
+    .cs-card { text-align: center; padding: 24px 12px; }
+    .cs-card i { font-size: 34px; color: #2e7d32; }
+    .cs-card .val { font-weight: 700; margin-top: 8px; }
+    .cs-card .lbl { font-size: 12px; color: #888; }
+    .promise-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
+    .promise-item:last-child { border-bottom: none; }
+    .promise-item i { font-size: 22px; color: #43a047; flex-shrink: 0; }
+    .promise-item .t { font-weight: 600; font-size: 14px; }
+    .promise-item .d { font-size: 12px; color: #888; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div id="app-root">
+
+    <!-- 联系方式 -->
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-3"><div class="sensor-card cs-card"><i class="bi bi-telephone"></i><div class="val">400-800-2010</div><div class="lbl">7×24 服务热线</div></div></div>
+      <div class="col-6 col-md-3"><div class="sensor-card cs-card"><i class="bi bi-wechat"></i><div class="val">AgriSense2010</div><div class="lbl">官方微信服务号</div></div></div>
+      <div class="col-6 col-md-3"><div class="sensor-card cs-card"><i class="bi bi-envelope"></i><div class="val">support@agrisense.cn</div><div class="lbl">技术支持邮箱</div></div></div>
+      <div class="col-6 col-md-3"><div class="sensor-card cs-card"><i class="bi bi-clock"></i><div class="val">8:30 - 18:00</div><div class="lbl">人工客服时间（工作日）</div></div></div>
+    </div>
+
+    <div class="row g-3">
+      <!-- 在线留言 -->
+      <div class="col-lg-7">
+        <div class="sensor-card h-100">
+          <h6 class="mb-3"><i class="bi bi-chat-dots"></i> 在线留言</h6>
+          <form id="feedback-form">
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">您的称呼</label>
+                <input type="text" class="form-control" id="f-name" placeholder="怎么称呼您？" />
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">联系方式</label>
+                <input type="text" class="form-control" id="f-contact" placeholder="手机号 / 微信号 / 邮箱" />
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">咨询类型</label>
+              <select class="form-select" id="f-type">
+                <option value="产品咨询">产品咨询</option>
+                <option value="设备故障">设备故障报修</option>
+                <option value="安装调试">安装调试预约</option>
+                <option value="商务合作">商务合作</option>
+                <option value="意见建议">意见与建议</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">留言内容 <span class="text-danger">*</span></label>
+              <textarea class="form-control" id="f-message" rows="4" placeholder="请描述您的问题或需求，客服将在 1 个工作日内与您联系..."></textarea>
+            </div>
+            <button type="button" class="btn btn-success" id="btn-submit"><i class="bi bi-send"></i> 提交留言</button>
+            <span class="text-success small ms-3 d-none" id="submit-ok"><i class="bi bi-check-circle"></i> 留言已提交，我们会尽快联系您！</span>
+          </form>
+        </div>
+      </div>
+
+      <!-- 服务承诺 -->
+      <div class="col-lg-5">
+        <div class="sensor-card h-100">
+          <h6 class="mb-2"><i class="bi bi-shield-check"></i> 服务承诺</h6>
+          <div class="promise-item"><i class="bi bi-lightning-charge"></i><div><div class="t">2 小时快速响应</div><div class="d">工作时间内提交的故障报修，2 小时内响应并给出处理方案</div></div></div>
+          <div class="promise-item"><i class="bi bi-tools"></i><div><div class="t">免费上门调试</div><div class="d">新装设备提供首次免费上门安装与调试服务</div></div></div>
+          <div class="promise-item"><i class="bi bi-arrow-repeat"></i><div><div class="t">一年质保换新</div><div class="d">监测终端一年内非人为损坏免费维修或更换</div></div></div>
+          <div class="promise-item"><i class="bi bi-mortarboard"></i><div><div class="t">免费技术培训</div><div class="d">定期举办线上培训，帮助用户掌握系统全部功能</div></div></div>
+          <div class="promise-item"><i class="bi bi-headset"></i><div><div class="t">专属客户成功经理</div><div class="d">规模化基地客户配备一对一客户成功经理全程跟进</div></div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>window.PAGE_CONFIG = { key: "service", title: "客服中心", icon: "bi-headset" };</script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script>
+    $(document).ready(function () {
+      $("#btn-submit").on("click", function () {
+        var payload = {
+          name: $("#f-name").val().trim() || "匿名用户",
+          contact: $("#f-contact").val().trim(),
+          type: $("#f-type").val(),
+          message: $("#f-message").val().trim(),
+        };
+        if (!payload.message) { alert("请填写留言内容"); return; }
+        $.ajax({
+          url: API_BASE + "/api/feedback",
+          method: "POST",
+          contentType: "application/json",
+          data: JSON.stringify(payload),
+          success: function () {
+            $("#feedback-form")[0].reset();
+            $("#submit-ok").removeClass("d-none");
+            setTimeout(function () { $("#submit-ok").addClass("d-none"); }, 5000);
+          },
+          error: function () { alert("提交失败，请稍后重试"); },
+        });
+      });
+    });
+  </script>
+  <script src="js/layout.js"></script>
+</body>
+</html>

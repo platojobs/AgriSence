@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>问题解答 - AgriSense</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet" />
+  <link href="css/style.css" rel="stylesheet" />
+  <link href="css/layout.css" rel="stylesheet" />
+  <style>
+    .faq-cat { font-weight: 700; color: #2e7d32; margin: 18px 0 10px; font-size: 15px; }
+    .faq-cat:first-child { margin-top: 0; }
+    .accordion-button:not(.collapsed) { background: #e8f5e9; color: #1b5e20; }
+    .accordion-button:focus { box-shadow: none; border-color: #c8e6c9; }
+    .accordion-body { font-size: 13px; color: #555; line-height: 1.8; }
+  </style>
+</head>
+<body>
+  <div id="app-root">
+
+    <div class="row g-3">
+      <div class="col-lg-8">
+        <div class="sensor-card">
+          <h6 class="mb-3"><i class="bi bi-question-circle"></i> 常见问题解答</h6>
+
+          <div class="faq-cat"><i class="bi bi-box-seam"></i> 产品与功能</div>
+          <div class="accordion" id="faq1">
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q1">AgriSense 系统包含哪些核心功能？</button></h2>
+              <div id="q1" class="accordion-collapse collapse show" data-bs-parent="#faq1"><div class="accordion-body">系统提供环境监测（土壤墒情、温湿度、光照）、智能灌溉控制、规则引擎自动告警、执行器远程控制、农产品溯源、AI 病害识别、数据大屏可视化、移动端管理等完整功能，覆盖「感知-决策-控制-溯源」全链路。</div></div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q2">系统支持哪些作物和种植场景？</button></h2>
+              <div id="q2" class="accordion-collapse collapse" data-bs-parent="#faq1"><div class="accordion-body">系统与作物种类无关，适用于设施大棚蔬菜、水果（番茄、黄瓜、草莓等）、大田作物及茶园、果园等场景。灌溉阈值、告警规则均可按作物自定义配置。</div></div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q3">病害识别的准确率如何？可以离线使用吗？</button></h2>
+              <div id="q3" class="accordion-collapse collapse" data-bs-parent="#faq1"><div class="accordion-body">当前版本的病害识别为演示功能，基于内置病害知识库返回结果。生产环境可接入训练好的图像分类模型，常见病害识别准确率可达 90% 以上；模型经轻量化处理后支持移动端离线推理。AI 结果仅供参考，实际防治请咨询农技专家。</div></div>
+            </div>
+          </div>
+
+          <div class="faq-cat"><i class="bi bi-cpu"></i> 设备安装与组网</div>
+          <div class="accordion" id="faq2">
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q4">传感器节点如何供电？续航多久？</button></h2>
+              <div id="q4" class="accordion-collapse collapse" data-bs-parent="#faq2"><div class="accordion-body">棚内节点建议 220V 市电+适配器供电；无电源场景可选太阳能+锂电池方案。大田 LoRa 节点采用低功耗设计，一节电池可续航 2-3 年。</div></div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q5">大棚里没有 WiFi 信号怎么办？</button></h2>
+              <div id="q5" class="accordion-collapse collapse" data-bs-parent="#faq2"><div class="accordion-body">提供三种方案：①棚区部署无线 AP 扩展 WiFi 覆盖；②采用 4G 网关直接回传数据；③远距离大田场景使用 LoRa 组网，单网关覆盖 3-5 公里。设备安装前我们会进行现场勘测并给出组网建议。</div></div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q6">土壤传感器应该埋多深？多久校准一次？</button></h2>
+              <div id="q6" class="accordion-collapse collapse" data-bs-parent="#faq2"><div class="accordion-body">传感器应埋设在主要根系层，蔬菜建议 20-30cm 深度。电容式土壤传感器基本免校准，建议每季度检查探头接触是否良好、有无腐蚀，每年用烘干法比对一次数据确保精度。</div></div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q7">设备显示离线，如何排查？</button></h2>
+              <div id="q7" class="accordion-collapse collapse" data-bs-parent="#faq2"><div class="accordion-body">按顺序排查：①检查设备供电是否正常；②检查 WiFi/网络连接（设备指示灯状态）；③确认 MQTT 服务（Mosquitto）是否运行；④查看后端日志是否收到数据。仍无法解决可联系客服远程协助。</div></div>
+            </div>
+          </div>
+
+          <div class="faq-cat"><i class="bi bi-database"></i> 数据与服务</div>
+          <div class="accordion" id="faq3">
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q8">监测数据保存在哪里？会丢失吗？</button></h2>
+              <div id="q8" class="accordion-collapse collapse" data-bs-parent="#faq3"><div class="accordion-body">数据默认保存在本地 SQLite 数据库，数据完全归您所有。建议定期备份数据库文件；规模化部署可升级为 MySQL/InfluxDB 并配置自动备份策略。</div></div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q9">历史数据可以导出吗？</button></h2>
+              <div id="q9" class="accordion-collapse collapse" data-bs-parent="#faq3"><div class="accordion-body">可以。「历史分析」页面支持按时间范围查询并一键导出 CSV 文件，可直接用 Excel 打开进行进一步分析。</div></div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q10">多个大棚可以统一管理吗？</button></h2>
+              <div id="q10" class="accordion-collapse collapse" data-bs-parent="#faq3"><div class="accordion-body">可以。系统支持多设备接入，每个大棚部署独立监测节点，在「设备管理」中统一查看状态，数据大屏可按地块/棚区展示所有监测点状态。</div></div>
+            </div>
+          </div>
+
+          <div class="faq-cat"><i class="bi bi-headset"></i> 售后保障</div>
+          <div class="accordion" id="faq4">
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q11">设备质保政策是怎样的？</button></h2>
+              <div id="q11" class="accordion-collapse collapse" data-bs-parent="#faq4"><div class="accordion-body">监测终端自签收之日起一年质保，非人为损坏免费维修或更换；人为损坏（如进水、摔坏）提供成本价维修。质保期外提供终身有偿维护服务。</div></div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q12">如何获得使用培训？</button></h2>
+              <div id="q12" class="accordion-collapse collapse" data-bs-parent="#faq4"><div class="accordion-body">我们提供三种培训方式：①新用户远程视频指导（约 1 小时）；②每月线上公开课；③规模化基地客户可申请上门培训。详情请前往客服中心预约。</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 侧边 -->
+      <div class="col-lg-4">
+        <div class="sensor-card mb-3">
+          <h6 class="mb-3"><i class="bi bi-search"></i> 没找到答案？</h6>
+          <p class="small text-muted">您可以通过以下方式获取进一步帮助：</p>
+          <div class="d-grid gap-2">
+            <a href="service.html" class="btn btn-success btn-sm"><i class="bi bi-headset"></i> 联系在线客服</a>
+            <a href="knowledge.html" class="btn btn-outline-success btn-sm"><i class="bi bi-book"></i> 浏览农业知识库</a>
+          </div>
+        </div>
+        <div class="sensor-card">
+          <h6 class="mb-3"><i class="bi bi-telephone"></i> 快速联系</h6>
+          <div class="small">
+            <div class="mb-2"><i class="bi bi-telephone-fill text-success me-2"></i>400-800-2010</div>
+            <div class="mb-2"><i class="bi bi-envelope-fill text-success me-2"></i>support@agrisense.cn</div>
+            <div><i class="bi bi-clock-fill text-success me-2"></i>工作日 8:30 - 18:00</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>window.PAGE_CONFIG = { key: "faq", title: "问题解答", icon: "bi-question-circle" };</script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/layout.js"></script>
+</body>
+</html>
