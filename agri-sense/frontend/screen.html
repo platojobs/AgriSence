@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>数据大屏 - AgriSense</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet" />
+  <link href="css/style.css" rel="stylesheet" />
+  <link href="css/layout.css" rel="stylesheet" />
+  <link href="css/screen.css" rel="stylesheet" />
+</head>
+<body class="screen-body">
+  <div id="app-root">
+
+    <!-- 顶部标题栏 -->
+    <div class="screen-header">
+      <div style="width:200px;"></div>
+      <h1><i class="bi bi-flower1"></i> AgriSense 智慧农业监测大屏</h1>
+      <div class="clock" id="screen-clock">--:--:--</div>
+    </div>
+
+    <!-- 三栏布局 -->
+    <div class="screen-grid">
+
+      <!-- 左栏：实时传感器 + 设备状态 -->
+      <div class="d-flex flex-column gap-3">
+        <div class="screen-panel">
+          <h3><i class="bi bi-activity"></i> 实时传感器</h3>
+          <div class="sensor-row soil">
+            <span class="lbl"><i class="bi bi-droplet-half"></i> 土壤墒情</span>
+            <span class="val" id="s-soil">--</span>
+          </div>
+          <div class="sensor-row temp">
+            <span class="lbl"><i class="bi bi-thermometer-half"></i> 环境温度</span>
+            <span class="val" id="s-temp">--</span>
+          </div>
+          <div class="sensor-row hum">
+            <span class="lbl"><i class="bi bi-cloud-haze"></i> 空气湿度</span>
+            <span class="val" id="s-hum">--</span>
+          </div>
+          <div class="sensor-row light">
+            <span class="lbl"><i class="bi bi-brightness-high"></i> 光照强度</span>
+            <span class="val" id="s-light">--</span>
+          </div>
+        </div>
+
+        <div class="screen-panel">
+          <h3><i class="bi bi-cpu"></i> 设备状态</h3>
+          <div id="device-status-list"></div>
+        </div>
+
+        <div class="screen-panel">
+          <h3><i class="bi bi-toggle-on"></i> 执行器</h3>
+          <div id="actuator-status-list"></div>
+        </div>
+      </div>
+
+      <!-- 中栏：大棚俯视图 + 核心指标 -->
+      <div class="d-flex flex-column gap-3">
+        <div class="screen-panel">
+          <h3><i class="bi bi-grid-3x3-gap"></i> 地块墒情分布</h3>
+          <div class="greenhouse-map" id="gh-map"></div>
+          <div class="core-metrics">
+            <div class="core-metric">
+              <div class="num" style="color:#a1887f" id="m-avg-soil">--</div>
+              <div class="lbl">平均墒情(%)</div>
+            </div>
+            <div class="core-metric">
+              <div class="num" style="color:#ffb74d" id="m-avg-temp">--</div>
+              <div class="lbl">平均温度(°C)</div>
+            </div>
+            <div class="core-metric">
+              <div class="num" style="color:#64b5f6" id="m-avg-hum">--</div>
+              <div class="lbl">平均湿度(%)</div>
+            </div>
+            <div class="core-metric">
+              <div class="num" style="color:#fff176" id="m-alert-count">--</div>
+              <div class="lbl">活跃告警</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="screen-panel flex-grow-1">
+          <h3><i class="bi bi-graph-up"></i> 24 小时趋势</h3>
+          <div id="screen-trend" style="height:100%; min-height:200px;"></div>
+        </div>
+      </div>
+
+      <!-- 右栏：灌溉统计 + 告警 -->
+      <div class="d-flex flex-column gap-3">
+        <div class="screen-panel">
+          <h3><i class="bi bi-bar-chart"></i> 今日灌溉统计</h3>
+          <div id="screen-irr-chart" style="height:160px;"></div>
+        </div>
+
+        <div class="screen-panel flex-grow-1">
+          <h3><i class="bi bi-bell"></i> 最近告警</h3>
+          <div id="screen-alert-list" style="max-height:260px; overflow-y:auto;"></div>
+        </div>
+      </div>
+
+      <!-- 底部告警滚动条 -->
+      <div class="screen-bottom">
+        <div class="alert-ticker">
+          <div class="alert-ticker-inner" id="alert-ticker-inner"></div>
+        </div>
+        <div class="screen-panel d-flex align-items-center justify-content-center" style="padding:0.4rem;">
+          <small class="text-muted">
+            <i class="bi bi-info-circle"></i> 数据每 5 秒自动刷新 · 系统运行中 ·
+            <span id="screen-update-time">--</span>
+          </small>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>window.PAGE_CONFIG = { key: "screen", title: "数据大屏", icon: "bi-display" };</script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/screen.js"></script>
+  <script src="js/layout.js"></script>
+</body>
+</html>

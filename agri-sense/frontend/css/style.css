@@ -1,0 +1,218 @@
+/* AgriSense 智慧农业监测系统 - 样式 */
+
+:root {
+  --agri-green: #2e7d32;
+  --agri-green-dark: #1b5e20;
+  --agri-green-light: #4caf50;
+  --soil-brown: #8d6e63;
+  --temp-orange: #ef6c00;
+  --hum-blue: #1976d2;
+  --light-yellow: #f9a825;
+  --card-bg: #ffffff;
+  --page-bg: #eef2f5;
+}
+
+body {
+  background: var(--page-bg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.container-fluid {
+  flex: 1;
+}
+
+/* ===== 顶部导航（旧版，已由 layout.css 侧边栏替代，保留兼容） ===== */
+.agri-navbar { display: none; }
+
+/* ===== 状态指示灯 ===== */
+.status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.status-dot.online {
+  background: #4caf50;
+  color: #4caf50;
+  animation: pulse-dot 2s infinite;
+}
+
+.status-dot.offline {
+  background: #e53935;
+  color: #e53935;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 4px #4caf50; }
+  50% { box-shadow: 0 0 10px #4caf50; }
+}
+
+/* ===== 传感器卡片 ===== */
+.sensor-card {
+  background: var(--card-bg);
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  padding: 1.1rem 1.3rem;
+  border-left: 4px solid transparent;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.sensor-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.card-label {
+  font-weight: 600;
+  color: #555;
+  font-size: 0.92rem;
+}
+
+.card-label i {
+  margin-right: 4px;
+}
+
+.card-value {
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1.1;
+  margin: 0.4rem 0;
+}
+
+.card-value .unit {
+  font-size: 1rem;
+  font-weight: 400;
+  color: #888;
+  margin-left: 4px;
+}
+
+.card-foot {
+  font-size: 0.78rem;
+  color: #999;
+  border-top: 1px dashed #eee;
+  padding-top: 0.5rem;
+}
+
+/* 各卡片主题色左边框 */
+.soil-card { border-left-color: var(--soil-brown); }
+.temp-card { border-left-color: var(--temp-orange); }
+.hum-card  { border-left-color: var(--hum-blue); }
+.light-card { border-left-color: var(--light-yellow); }
+
+.soil-card .card-value { color: var(--soil-brown); }
+.temp-card .card-value { color: var(--temp-orange); }
+.hum-card  .card-value { color: var(--hum-blue); }
+.light-card .card-value { color: var(--light-yellow); }
+
+/* 土壤墒情告警状态 */
+.sensor-card.warning {
+  border-left-color: #ff9800;
+  background: #fff8e1;
+  animation: blink 1.2s infinite;
+}
+
+.sensor-card.normal {
+  border-left-color: var(--agri-green);
+}
+
+@keyframes blink {
+  50% { opacity: 0.75; }
+}
+
+/* ===== 图表卡片 ===== */
+.chart-card {
+  border-left-color: var(--agri-green);
+}
+
+/* ===== 迷你统计 ===== */
+.mini-stat {
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  border-left: 3px solid var(--agri-green-light);
+}
+
+.mini-stat i {
+  font-size: 1.4rem;
+  color: var(--agri-green);
+}
+
+.mini-stat .fw-bold {
+  font-size: 1.1rem;
+  color: #333;
+}
+
+/* ===== 灌溉控制卡片 ===== */
+.control-card {
+  border-left-color: var(--agri-green);
+}
+
+.irrigation-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.35rem 1rem;
+  border-radius: 20px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  background: #f1f3f4;
+  color: #666;
+}
+
+.irrigation-status-pill i {
+  font-size: 0.6rem;
+}
+
+.irrigation-status-pill.status-start {
+  background: #e8f5e9;
+  color: var(--agri-green);
+}
+
+.irrigation-status-pill.status-stop {
+  background: #e3f2fd;
+  color: var(--hum-blue);
+}
+
+.irrigation-status-pill.status-hold {
+  background: #fff8e1;
+  color: #f57f17;
+}
+
+/* 日志表格 */
+#log-table tr td {
+  vertical-align: middle;
+}
+
+#log-table .badge {
+  font-size: 0.78rem;
+}
+
+/* ===== 页脚 ===== */
+.agri-footer {
+  background: linear-gradient(135deg, var(--agri-green-dark), var(--agri-green));
+  margin-top: 1.5rem;
+}
+
+/* 小屏适配 */
+@media (max-width: 768px) {
+  .brand-title { font-size: 1.1rem; }
+  .card-value { font-size: 1.8rem; }
+}

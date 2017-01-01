@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AgriSense 移动端</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet" />
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    body { background: #f0f4f1; font-family: -apple-system, "PingFang SC", sans-serif; padding-bottom: 80px; }
+    .m-header { background: linear-gradient(135deg, #2e7d32, #43a047); color: #fff; padding: 18px 16px; border-radius: 0 0 20px 20px; }
+    .m-header h1 { font-size: 18px; margin: 0; }
+    .m-header .sub { font-size: 12px; opacity: .85; }
+    .m-card { background: #fff; border-radius: 14px; padding: 16px; margin: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.05); }
+    .m-card h6 { font-size: 14px; color: #555; margin-bottom: 10px; }
+    .moisture-ring { position: relative; width: 140px; height: 140px; margin: 0 auto; }
+    .moisture-ring svg { transform: rotate(-90deg); }
+    .moisture-val { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .moisture-val .num { font-size: 36px; font-weight: 700; color: #2e7d32; }
+    .moisture-val .unit { font-size: 12px; color: #888; }
+    .env-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .env-item { background: #f6f8f6; border-radius: 10px; padding: 12px; text-align: center; }
+    .env-item .lbl { font-size: 11px; color: #888; }
+    .env-item .val { font-size: 20px; font-weight: 600; color: #2e7d32; margin-top: 2px; }
+    .btn-irrigate { background: linear-gradient(135deg, #1976d2, #42a5f5); color: #fff; border: none; border-radius: 14px; padding: 18px; width: 100%; font-size: 18px; font-weight: 600; box-shadow: 0 4px 12px rgba(25,118,210,.3); }
+    .btn-irrigate:active { transform: scale(.98); }
+    .btn-irrigate:disabled { opacity: .6; }
+    .alert-item { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+    .alert-item:last-child { border-bottom: none; }
+    .alert-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 10px; flex-shrink: 0; }
+    .alert-dot.warning { background: #ff9800; }
+    .alert-dot.critical { background: #f44336; }
+    .alert-dot.info { background: #2196f3; }
+    .alert-msg { font-size: 13px; color: #333; flex: 1; }
+    .alert-time { font-size: 11px; color: #aaa; }
+    .m-footer { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; padding: 10px 16px; display: flex; justify-content: space-around; box-shadow: 0 -2px 8px rgba(0,0,0,.06); }
+    .m-footer a { color: #888; text-align: center; font-size: 11px; text-decoration: none; }
+    .m-footer a.active { color: #2e7d32; }
+    .m-footer i { display: block; font-size: 20px; margin-bottom: 2px; }
+    .status-line { font-size: 12px; display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot-online { background: #4caf50; }
+    .dot-offline { background: #9e9e9e; }
+  </style>
+</head>
+<body>
+
+  <div class="m-header">
+    <h1><i class="bi bi-flower1"></i> AgriSense 智慧农业</h1>
+    <div class="sub">一号大棚 · 实时监测</div>
+  </div>
+
+  <!-- 土壤墒情 -->
+  <div class="m-card text-center">
+    <h6><i class="bi bi-droplet"></i> 土壤墒情</h6>
+    <div class="moisture-ring">
+      <svg width="140" height="140">
+        <circle cx="70" cy="70" r="60" stroke="#e8f5e9" stroke-width="12" fill="none" />
+        <circle id="moisture-arc" cx="70" cy="70" r="60" stroke="#43a047" stroke-width="12" fill="none"
+          stroke-linecap="round" stroke-dasharray="377" stroke-dashoffset="377" />
+      </svg>
+      <div class="moisture-val">
+        <div class="num" id="moisture-num">--</div>
+        <div class="unit">%</div>
+      </div>
+    </div>
+    <div class="status-line justify-content-center">
+      <span class="status-dot dot-online" id="conn-dot"></span>
+      <span id="update-time">--</span>
+    </div>
+  </div>
+
+  <!-- 环境参数 -->
+  <div class="m-card">
+    <h6><i class="bi bi-thermometer-half"></i> 环境参数</h6>
+    <div class="env-grid">
+      <div class="env-item"><div class="lbl">空气温度</div><div class="val" id="env-temp">--°C</div></div>
+      <div class="env-item"><div class="lbl">空气湿度</div><div class="val" id="env-humi">--%</div></div>
+      <div class="env-item"><div class="lbl">光照强度</div><div class="val" id="env-light">--lux</div></div>
+      <div class="env-item"><div class="lbl">执行器</div><div class="val" id="env-act">--</div></div>
+    </div>
+  </div>
+
+  <!-- 一键灌溉 -->
+  <div class="m-card">
+    <h6><i class="bi bi-water"></i> 远程控制</h6>
+    <button class="btn-irrigate" id="btn-irrigate">
+      <i class="bi bi-cloud-rain"></i> 一键灌溉
+    </button>
+    <div class="text-center text-muted small mt-2" id="irrigate-hint">点击开启灌溉阀门</div>
+  </div>
+
+  <!-- 告警 -->
+  <div class="m-card">
+    <h6><i class="bi bi-bell"></i> 最新告警</h6>
+    <div id="alert-list">
+      <div class="text-muted text-center py-3 small">暂无告警</div>
+    </div>
+  </div>
+
+  <!-- 底部导航 -->
+  <div class="m-footer">
+    <a class="active" href="#"><i class="bi bi-house"></i>首页</a>
+    <a href="realtime.html"><i class="bi bi-activity"></i>监测</a>
+    <a href="irrigation.html"><i class="bi bi-water"></i>灌溉</a>
+    <a href="alerts.html"><i class="bi bi-bell"></i>告警</a>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script>
+    const API_BASE = "http://localhost:5001";
+    const CIRC = 2 * Math.PI * 60; // 376.99
+
+    function fmtTime(t) {
+      if (!t) return "--";
+      return t.replace("T", " ").slice(0, 16);
+    }
+
+    function loadLatest() {
+      $.get(API_BASE + "/api/sensors/latest", function (d) {
+        if (!d) return;
+        const m = d.soil_moisture ?? 0;
+        $("#moisture-num").text(m.toFixed(1));
+        $("#moisture-arc").attr("stroke-dashoffset", CIRC * (1 - m / 100));
+        $("#env-temp").text((d.temperature ?? "--") + "°C");
+        $("#env-humi").text((d.humidity ?? "--") + "%");
+        $("#env-light").text((d.light ?? "--") + "lux");
+        $("#update-time").text(fmtTime(d.timestamp));
+      });
+      $.get(API_BASE + "/api/actuators", function (acts) {
+        const irr = (acts || []).find((a) => a.name === "irrigation_valve");
+        $("#env-act").text(irr && irr.status === "on" ? "灌溉中" : "待机");
+      });
+      $.get(API_BASE + "/api/alerts?status=pending", function (alerts) {
+        const list = alerts || [];
+        if (list.length === 0) {
+          $("#alert-list").html('<div class="text-muted text-center py-3 small">暂无告警</div>');
+          return;
+        }
+        $("#alert-list").html(list.slice(0, 5).map((a) => `
+          <div class="alert-item">
+            <span class="alert-dot ${a.level || 'info'}"></span>
+            <div class="alert-msg">${a.message || ''}</div>
+            <div class="alert-time">${(a.created_at || '').slice(11, 16)}</div>
+          </div>
+        `).join(""));
+      });
+    }
+
+    function irrigate() {
+      const btn = $("#btn-irrigate").prop("disabled", true);
+      $("#irrigate-hint").text("正在发送指令...");
+      $.ajax({
+        url: API_BASE + "/api/actuators/irrigation_valve/control",
+        method: "POST",
+        contentType: "application/json",
+        data: JSON.stringify({ status: "on" }),
+        success: function () {
+          $("#irrigate-hint").text("灌溉已开启，30秒后自动关闭");
+          setTimeout(() => {
+            $.ajax({
+              url: API_BASE + "/api/actuators/irrigation_valve/control",
+              method: "POST",
+              contentType: "application/json",
+              data: JSON.stringify({ status: "off" }),
+            });
+            $("#irrigate-hint").text("点击开启灌溉阀门");
+            btn.prop("disabled", false);
+          }, 30000);
+        },
+        error: function () {
+          $("#irrigate-hint").text("指令发送失败");
+          btn.prop("disabled", false);
+        },
+      });
+    }
+
+    $(function () {
+      loadLatest();
+      setInterval(loadLatest, 5000);
+      $("#btn-irrigate").on("click", irrigate);
+    });
+  </script>
+</body>
+</html>

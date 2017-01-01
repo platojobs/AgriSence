@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>溯源管理 - AgriSense</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet" />
+  <link href="css/style.css" rel="stylesheet" />
+  <link href="css/layout.css" rel="stylesheet" />
+  <style>
+    .trace-timeline { position: relative; padding-left: 28px; }
+    .trace-timeline::before { content: ""; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: #dee2e6; }
+    .tl-item { position: relative; padding-bottom: 18px; }
+    .tl-item::before { content: ""; position: absolute; left: -25px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: #198754; border: 2px solid #fff; box-shadow: 0 0 0 1px #198754; }
+    .tl-item.sowing::before { background: #0d6efd; box-shadow: 0 0 0 1px #0d6efd; }
+    .tl-item.harvest::before { background: #ffc107; box-shadow: 0 0 0 1px #ffc107; }
+    .tl-date { font-size: 12px; color: #6c757d; }
+    .tl-label { font-weight: 600; color: #212529; }
+    .tl-desc { font-size: 13px; color: #495057; }
+    .qr-box { background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 12px; text-align: center; }
+    .quality-pill { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; }
+    .q-pending { background: #fff3cd; color: #856404; }
+    .q-qualified { background: #d1e7dd; color: #0f5132; }
+    .q-unqualified { background: #f8d7da; color: #842029; }
+  </style>
+</head>
+<body>
+  <div id="app-root">
+
+    <!-- 批次列表 -->
+    <div class="sensor-card mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0"><i class="bi bi-box-seam"></i> 溯源批次</h6>
+        <button class="btn btn-success btn-sm" id="btn-add-batch">
+          <i class="bi bi-plus-lg"></i> 新增批次
+        </button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>批次号</th>
+              <th>作物</th>
+              <th>播种日期</th>
+              <th>采收日期</th>
+              <th>质检状态</th>
+              <th class="text-end">操作</th>
+            </tr>
+          </thead>
+          <tbody id="batches-table">
+            <tr><td colspan="6" class="text-center text-muted py-3">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 批次详情：时间线 + 二维码 -->
+    <div class="row g-3 mb-4">
+      <div class="col-lg-8">
+        <div class="sensor-card h-100">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0"><i class="bi bi-clock-history"></i> 溯源时间线 <small class="text-muted" id="detail-batch-no"></small></h6>
+            <div id="detail-quality-actions" class="d-none">
+              <button class="btn btn-sm btn-outline-success btn-quality" data-status="qualified">合格</button>
+              <button class="btn btn-sm btn-outline-danger btn-quality" data-status="unqualified">不合格</button>
+            </div>
+          </div>
+          <div id="timeline-empty" class="text-center text-muted py-4">
+            <i class="bi bi-arrow-up-circle"></i> 请从上方选择一个批次查看溯源时间线
+          </div>
+          <div id="timeline-box" class="trace-timeline d-none"></div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="sensor-card h-100">
+          <h6 class="mb-3"><i class="bi bi-qr-code"></i> 溯源二维码</h6>
+          <div id="qr-empty" class="text-center text-muted py-4">
+            <i class="bi bi-qr-code" style="font-size:48px;opacity:.3"></i>
+            <div class="mt-2">选择批次后生成</div>
+          </div>
+          <div id="qr-box-wrap" class="d-none">
+            <div class="qr-box">
+              <img id="qr-img" src="" alt="溯源二维码" class="img-fluid" />
+              <div class="mt-2 small text-muted" id="qr-caption">扫码查看溯源详情</div>
+            </div>
+            <div class="mt-3">
+              <label class="form-label small">批次号</label>
+              <input type="text" class="form-control form-control-sm" id="qr-batch-input" placeholder="输入批次号生成二维码" />
+              <button class="btn btn-primary btn-sm w-100 mt-2" id="btn-gen-qr">生成二维码</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 农事日志 -->
+    <div class="sensor-card">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0"><i class="bi bi-journal-text"></i> 农事日志</h6>
+        <button class="btn btn-success btn-sm" id="btn-add-log">
+          <i class="bi bi-plus-lg"></i> 新增日志
+        </button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>时间</th>
+              <th>类型</th>
+              <th>描述</th>
+              <th>操作人</th>
+              <th class="text-end">操作</th>
+            </tr>
+          </thead>
+          <tbody id="logs-table">
+            <tr><td colspan="5" class="text-center text-muted py-3">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 新增批次弹窗 -->
+    <div class="modal fade" id="batch-modal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="bi bi-box-seam"></i> 新增溯源批次</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <form id="batch-form">
+              <div class="mb-3">
+                <label class="form-label">批次号 <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="f-batch-no" placeholder="如 AGRI-20100520-001" />
+              </div>
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">作物名称</label>
+                  <input type="text" class="form-control" id="f-crop-name" placeholder="如 番茄" />
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">质检状态</label>
+                  <select class="form-select" id="f-quality">
+                    <option value="pending">待质检</option>
+                    <option value="qualified">合格</option>
+                    <option value="unqualified">不合格</option>
+                  </select>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">播种日期</label>
+                  <input type="date" class="form-control" id="f-sowing-date" />
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">采收日期</label>
+                  <input type="date" class="form-control" id="f-harvest-date" />
+                </div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">备注</label>
+                <textarea class="form-control" id="f-notes" rows="2"></textarea>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            <button type="button" class="btn btn-success" id="btn-save-batch">保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 新增农事日志弹窗 -->
+    <div class="modal fade" id="log-modal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="bi bi-journal-plus"></i> 新增农事日志</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <form id="log-form">
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">操作类型</label>
+                  <select class="form-select" id="f-log-type">
+                    <option value="施肥">施肥</option>
+                    <option value="打药">打药</option>
+                    <option value="除草">除草</option>
+                    <option value="灌溉">灌溉</option>
+                    <option value="采收">采收</option>
+                    <option value="巡检">巡检</option>
+                    <option value="其他">其他</option>
+                  </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">操作人</label>
+                  <input type="text" class="form-control" id="f-log-operator" value="系统" />
+                </div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">描述</label>
+                <textarea class="form-control" id="f-log-desc" rows="3" placeholder="详细描述本次农事操作..."></textarea>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            <button type="button" class="btn btn-success" id="btn-save-log">保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>window.PAGE_CONFIG = { key: "trace", title: "溯源管理", icon: "bi-box-seam" };</script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/trace.js"></script>
+  <script src="js/layout.js"></script>
+</body>
+</html>
