@@ -36,6 +36,7 @@ from database import (
     insert_feedback,
 )
 from irrigation_logic import decide
+from weather_service import get_weather, rain_summary
 
 app = Flask(__name__)
 CORS(app)
@@ -78,18 +79,23 @@ def on_message(client, userdata, msg):
 # 决策辅助：基于最新读数与当前阈值计算灌溉决策
 # ---------------------------------------------------------------------------
 def _build_decision(latest):
-    """根据最新读数与当前阈值返回决策 dict。"""
+    """根据最新读数、当前阈值与未来降水返回决策 dict。"""
     soil_moisture = latest.get("soil_moisture") if latest else None
+    rain = rain_summary()
     action, reason = decide(
         soil_moisture,
         threshold_low=current_thresholds["low"],
         threshold_high=current_thresholds["high"],
+        rain_prob=rain["rain_prob"],
+        rain_mm=rain["rain_mm"],
     )
     return {
         "decision": action,
         "decision_text": reason,
         "threshold_low": current_thresholds["low"],
         "threshold_high": current_thresholds["high"],
+        "rain_prob": rain["rain_prob"],
+        "rain_mm": rain["rain_mm"],
     }
 
 
@@ -238,6 +244,41 @@ def api_thresholds():
     current_thresholds["low"] = low
     current_thresholds["high"] = high
     return jsonify({"status": "ok", "low": low, "high": high})
+
+
+# ---------------------------------------------------------------------------
+# 气象服务 API
+# ---------------------------------------------------------------------------
+@app.route("/api/weather", methods=["GET"])
+def api_weather():
+    """城市气象：当前天气 + 24 小时 + 7 天预报 + 农事指数 + 天气驱动灌溉建议。"""
+    city = request.args.get("city", default="杭州", type=str)
+    weather = get_weather(city)
+
+    latest = get_latest()
+    decision = _build_decision(latest)
+
+    # 天气联动的灌溉建议：把墒情决策与未来降水合并给出结论
+    if decision["decision"] == "hold" and decision["rain_prob"] >= 60:
+        tip = "系统已根据降雨预报自动推迟灌溉，预计可节省 1 次灌溉用水"
+    elif decision["decision"] == "start":
+        tip = "未来 24 小时降水不足以补充墒情，建议按计划灌溉"
+    elif decision["decision"] == "stop":
+        tip = "墒情充足，无需灌溉，注意排水防涝"
+    else:
+        tip = "墒情与气象条件均正常，无需灌溉"
+
+    weather["irrigation"] = {
+        "soil_moisture": latest.get("soil_moisture") if latest else None,
+        "decision": decision["decision"],
+        "decision_text": decision["decision_text"],
+        "rain_prob": decision["rain_prob"],
+        "rain_mm": decision["rain_mm"],
+        "threshold_low": decision["threshold_low"],
+        "threshold_high": decision["threshold_high"],
+        "tip": tip,
+    }
+    return jsonify(weather)
 
 
 # ---------------------------------------------------------------------------

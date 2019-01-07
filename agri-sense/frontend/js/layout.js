@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { key: "dashboard", label: "仪表盘", icon: "bi-speedometer2", href: "index.html" },
   { key: "realtime", label: "实时监测", icon: "bi-activity", href: "realtime.html" },
   { key: "history", label: "历史分析", icon: "bi-graph-up-arrow", href: "history.html" },
+  { key: "weather", label: "气象服务", icon: "bi-cloud-sun", href: "weather.html" },
   { key: "screen", label: "数据大屏", icon: "bi-display", href: "screen.html" },
   { section: "管理" },
   { key: "devices", label: "设备管理", icon: "bi-cpu", href: "devices.html" },
@@ -46,7 +47,7 @@ function buildSidebar(activeKey) {
   });
 
   html += '</nav>';
-  html += '<div class="sidebar-footer">v2.2.0 &copy; 2010 AgriSense<br><a href="mobile.html" target="_blank" class="text-light"><i class="bi bi-phone"></i> 移动端</a></div>';
+  html += '<div class="sidebar-footer">v2.3.0 &copy; 2010 AgriSense<br><a href="mobile.html" target="_blank" class="text-light"><i class="bi bi-phone"></i> 移动端</a></div>';
   html += '</aside>';
   return html;
 }
@@ -85,6 +86,7 @@ function buildFooter() {
         <div class="footer-col">
           <h6>产品中心</h6>
           <a href="index.html">监测仪表盘</a>
+          <a href="weather.html">气象服务</a>
           <a href="screen.html">数据大屏</a>
           <a href="trace.html">溯源管理</a>
           <a href="disease.html">病害识别</a>

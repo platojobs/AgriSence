@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>气象服务 - AgriSense</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet" />
+  <link href="css/style.css" rel="stylesheet" />
+  <link href="css/layout.css" rel="stylesheet" />
+  <style>
+    .city-bar .btn { border-radius: 20px; font-size: 13px; padding: 3px 14px; }
+    .w-hero { border-left-color: #4a9edb; }
+    .w-temp { font-size: 54px; font-weight: 700; line-height: 1; }
+    .w-sub { font-size: 13px; color: #8a8f95; }
+    .w-metric {
+      text-align: center; padding: 8px 4px; border-radius: 8px; background: #f6f8f7;
+    }
+    .w-metric-value { font-weight: 700; font-size: 15px; }
+    .w-metric-label { font-size: 11px; color: #8a8f95; }
+    .fi-ring {
+      width: 96px; height: 96px; border-radius: 50%; display: flex; align-items: center;
+      justify-content: center; flex-direction: column; color: #fff; margin: 0 auto;
+    }
+    .fi-ring .score { font-size: 28px; font-weight: 700; line-height: 1; }
+    .fi-ring .unit { font-size: 11px; opacity: .9; }
+    .tip-item { font-size: 12.5px; color: #555; padding: 5px 0; border-bottom: 1px dashed #e6ece8; }
+    .tip-item:last-child { border-bottom: none; }
+    .day-row {
+      display: flex; align-items: center; padding: 9px 6px; border-bottom: 1px solid #f0f2f1;
+    }
+    .day-row:last-child { border-bottom: none; }
+    .day-name { width: 64px; font-size: 13px; }
+    .day-icon { width: 34px; text-align: center; font-size: 17px; }
+    .day-bar { flex: 1; height: 5px; background: #eef1ef; border-radius: 3px; position: relative; margin: 0 10px; }
+    .day-bar span { position: absolute; height: 5px; border-radius: 3px; background: linear-gradient(90deg, #62b6f0, #f6b93b); }
+    .day-temp { width: 76px; text-align: right; font-size: 12.5px; }
+    .day-rain { width: 52px; text-align: right; font-size: 12px; color: #4a9edb; }
+    .alert-row { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px dashed #e6ece8; font-size: 12.5px; }
+    .alert-row:last-child { border-bottom: none; }
+    .alert-badge { flex: 0 0 auto; font-size: 11px; padding: 2px 8px; border-radius: 10px; height: 20px; }
+    .alert-badge.warning { background: #fff4e0; color: #b7791f; }
+    .alert-badge.danger { background: #fdeaea; color: #c0392b; }
+    .decision-pill { font-size: 12px; padding: 3px 10px; border-radius: 12px; }
+  </style>
+</head>
+<body>
+  <div id="app-root">
+
+    <!-- 城市切换 -->
+    <div class="sensor-card mb-4 city-bar">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="btn-group btn-group-sm" id="city-group">
+          <button class="btn btn-outline-success active" data-city="杭州">杭州</button>
+          <button class="btn btn-outline-success" data-city="北京">北京</button>
+          <button class="btn btn-outline-success" data-city="广州">广州</button>
+          <button class="btn btn-outline-success" data-city="成都">成都</button>
+          <button class="btn btn-outline-success" data-city="西安">西安</button>
+          <button class="btn btn-outline-success" data-city="哈尔滨">哈尔滨</button>
+        </div>
+        <div class="w-sub">
+          <i class="bi bi-broadcast"></i> 数据来源：<span id="w-source">--</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 顶部三卡 -->
+    <div class="row g-3 mb-4">
+      <div class="col-12 col-lg-5">
+        <div class="sensor-card w-hero h-100">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="card-label mb-1"><i class="bi bi-geo-alt"></i> <span id="w-city">杭州</span> · 农业气象站</div>
+              <div class="d-flex align-items-end gap-3 mt-2">
+                <span class="w-temp" id="w-temp">--</span><span class="fs-5 text-muted" style="margin-bottom:6px">℃</span>
+                <i class="bi bi-sun" id="w-icon" style="font-size:48px;color:#f6b93b"></i>
+              </div>
+              <div class="fs-5 mt-2" id="w-text">--</div>
+              <div class="w-sub mt-1">体感 <span id="w-feels">--</span>℃ · 更新于 <span id="w-update">--</span></div>
+            </div>
+            <span class="decision-pill" id="w-rain-pill">降水 --%</span>
+          </div>
+          <div class="row g-2 mt-3">
+            <div class="col-4"><div class="w-metric"><div class="w-metric-value" id="w-hum">--</div><div class="w-metric-label">空气湿度 %</div></div></div>
+            <div class="col-4"><div class="w-metric"><div class="w-metric-value" id="w-wind">--</div><div class="w-metric-label">风速 m/s</div></div></div>
+            <div class="col-4"><div class="w-metric"><div class="w-metric-value" id="w-pressure">--</div><div class="w-metric-label">气压 hPa</div></div></div>
+            <div class="col-4"><div class="w-metric"><div class="w-metric-value" id="w-rain-mm">--</div><div class="w-metric-label">预计降水 mm</div></div></div>
+            <div class="col-4"><div class="w-metric"><div class="w-metric-value" id="w-vis">--</div><div class="w-metric-label">能见度 km</div></div></div>
+            <div class="col-4"><div class="w-metric"><div class="w-metric-value" id="w-uv">--</div><div class="w-metric-label">紫外线指数</div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-md-6 col-lg-3">
+        <div class="sensor-card h-100">
+          <div class="card-label mb-3"><i class="bi bi-clipboard-check"></i> 农事适宜度</div>
+          <div class="fi-ring" id="fi-ring" style="background:#2e7d32">
+            <span class="score" id="fi-score">--</span><span class="unit" id="fi-text">--</span>
+          </div>
+          <div class="mt-3" id="fi-tips">
+            <div class="text-muted small text-center">加载中...</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="sensor-card h-100">
+          <div class="card-label mb-2"><i class="bi bi-droplet-half"></i> 天气驱动灌溉建议</div>
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="decision-pill" id="irr-pill">--</span>
+            <span class="w-sub">当前墒情 <b id="irr-soil">--</b>%</span>
+          </div>
+          <div class="small text-muted mb-3" id="irr-decision">--</div>
+          <div class="p-2 rounded" style="background:#f2f8ef;font-size:12.5px;color:#2e7d32" id="irr-tip">
+            正在结合墒情与降雨预报计算...
+          </div>
+          <div class="mt-3 row g-2">
+            <div class="col-6"><div class="w-metric"><div class="w-metric-value" id="irr-rain-prob">--</div><div class="w-metric-label">24h 降雨概率 %</div></div></div>
+            <div class="col-6"><div class="w-metric"><div class="w-metric-value" id="irr-rain-mm">--</div><div class="w-metric-label">24h 预计降水 mm</div></div></div>
+          </div>
+          <div class="w-sub mt-3"><i class="bi bi-info-circle"></i> 阈值 <span id="irr-threshold">--</span>
+            · 降雨概率 ≥60% 时自动推迟灌溉</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 24 小时趋势 -->
+    <div class="chart-card mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="card-label mb-0"><i class="bi bi-graph-up"></i> 未来 24 小时温度与降水概率</div>
+      </div>
+      <div id="w-chart" style="height:300px"></div>
+    </div>
+
+    <!-- 7 天预报 + 预警 -->
+    <div class="row g-3">
+      <div class="col-12 col-lg-8">
+        <div class="sensor-card h-100">
+          <div class="card-label mb-2"><i class="bi bi-calendar-week"></i> 未来 7 天预报</div>
+          <div id="w-days"><div class="text-muted small py-3">加载中...</div></div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-4">
+        <div class="sensor-card h-100">
+          <div class="card-label mb-2"><i class="bi bi-exclamation-triangle"></i> 气象预警</div>
+          <div id="w-alerts"><div class="text-muted small py-3">加载中...</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>window.PAGE_CONFIG = { key: "weather", title: "气象服务", icon: "bi-cloud-sun" };</script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <script src="js/dashboard.js?v=3"></script>
+  <script src="js/weather.js?v=1"></script>
+  <script src="js/layout.js?v=6"></script>
+</body>
+</html>
