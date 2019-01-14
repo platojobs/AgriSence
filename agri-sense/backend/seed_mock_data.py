@@ -22,6 +22,7 @@ from database import (
     upsert_device, insert_alert, upsert_alert_rule, insert_schedule,
     upsert_actuator, insert_farm_log, insert_batch,
     insert_knowledge, insert_news,
+    get_user_by_username, create_user,
 )
 
 
@@ -188,6 +189,34 @@ def seed():
     ]
     for cat, title, summary, content, is_top in news:
         insert_news(cat, title, summary, content, is_top=is_top)
+
+    # ---- 演示账号 ----
+    seed_users()
+
+
+def seed_users():
+    """播种演示账号（已存在则跳过），密码使用 PBKDF2 加盐哈希存储。"""
+    import hashlib
+    import uuid
+
+    def _hash(password, salt=None):
+        salt = salt or uuid.uuid4().hex[:16]
+        digest = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), salt.encode("utf-8"), 120000
+        ).hex()
+        return digest, salt
+
+    accounts = [
+        ("admin", "admin123", "系统管理员", "admin"),
+        ("operator", "op123456", "张技术员", "operator"),
+        ("viewer", "view123456", "李观察员", "viewer"),
+    ]
+    for username, password, display_name, role in accounts:
+        if get_user_by_username(username):
+            continue
+        digest, salt = _hash(password)
+        create_user(username, digest, salt, display_name, role)
+        print("seed user:", username, "/", password, "(", role, ")")
 
 
 if __name__ == "__main__":

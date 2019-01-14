@@ -18,6 +18,8 @@ const NAV_ITEMS = [
   { section: "资讯" },
   { key: "knowledge", label: "农业知识库", icon: "bi-book", href: "knowledge.html" },
   { key: "news", label: "农业新闻", icon: "bi-newspaper", href: "news.html" },
+  { section: "系统" },
+  { key: "users", label: "用户管理", icon: "bi-people", href: "users.html" },
   { section: "支持" },
   { key: "about", label: "关于我们", icon: "bi-info-circle", href: "about.html" },
   { key: "service", label: "客服中心", icon: "bi-headset", href: "service.html" },
@@ -47,12 +49,20 @@ function buildSidebar(activeKey) {
   });
 
   html += '</nav>';
-  html += '<div class="sidebar-footer">v2.3.0 &copy; 2010 AgriSense<br><a href="mobile.html" target="_blank" class="text-light"><i class="bi bi-phone"></i> 移动端</a></div>';
+  html += '<div class="sidebar-footer">v2.4.0 &copy; 2010 AgriSense<br><a href="mobile.html" target="_blank" class="text-light"><i class="bi bi-phone"></i> 移动端</a></div>';
   html += '</aside>';
   return html;
 }
 
 function buildTopbar(title, icon) {
+  const user = typeof getCurrentUser === "function" ? getCurrentUser() : null;
+  const userHtml = user
+    ? '<div class="topbar-user"><i class="bi bi-person-circle"></i>' +
+      '<span class="u-name">' + (user.display_name || user.username) + "</span>" +
+      '<span class="u-role">' + roleLabel(user.role) + "</span>" +
+      '<a href="javascript:;" onclick="logout()" title="退出登录"><i class="bi bi-box-arrow-right"></i></a></div>'
+    : '<a class="topbar-login" href="login.html"><i class="bi bi-person"></i> 登录</a>';
+
   return `
     <header class="app-topbar">
       <div class="page-title"><i class="bi ${icon}"></i>${title}</div>
@@ -69,6 +79,7 @@ function buildTopbar(title, icon) {
           <span id="connection-status" class="status-dot offline me-2"></span>
           <small>系统运行中</small>
         </div>
+        ${userHtml}
       </div>
     </header>
   `;

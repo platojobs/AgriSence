@@ -165,6 +165,58 @@
   color: #444;
 }
 
+/* 顶栏用户信息 */
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 20px;
+  background: #f1f6f2;
+  border: 1px solid #e2ece5;
+  font-size: 0.82rem;
+}
+
+.topbar-user i.bi-person-circle {
+  color: #2e7d32;
+  font-size: 1rem;
+}
+
+.topbar-user .u-name {
+  font-weight: 600;
+  color: #333;
+}
+
+.topbar-user .u-role {
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #dff0e2;
+  color: #2e7d32;
+}
+
+.topbar-user a {
+  color: #999;
+}
+
+.topbar-user a:hover {
+  color: #c0392b;
+}
+
+.topbar-login {
+  font-size: 0.82rem;
+  text-decoration: none;
+  color: #2e7d32;
+  border: 1px solid #cfe3d3;
+  padding: 0.2rem 0.7rem;
+  border-radius: 16px;
+}
+
+.topbar-login:hover {
+  background: #2e7d32;
+  color: #fff;
+}
+
 .app-content {
   padding: 1.5rem;
   flex: 1;

@@ -1,6 +1,53 @@
 // AgriSense 仪表盘：实时拉取最新传感器读数与灌溉决策
 const API_BASE = "http://localhost:5001"; // ★ 用户修改：后端地址
 
+// ---------- 登录态工具（login.html / layout.js / 各页面共用） ----------
+function getAuthToken() {
+  return localStorage.getItem("agri_token") || "";
+}
+
+function getCurrentUser() {
+  try {
+    return JSON.parse(localStorage.getItem("agri_user") || "null");
+  } catch (e) {
+    return null;
+  }
+}
+
+function setAuth(token, user) {
+  localStorage.setItem("agri_token", token);
+  localStorage.setItem("agri_user", JSON.stringify(user || {}));
+}
+
+function clearAuth() {
+  localStorage.removeItem("agri_token");
+  localStorage.removeItem("agri_user");
+}
+
+function logout() {
+  $.ajax({
+    url: API_BASE + "/api/auth/logout",
+    type: "POST",
+    headers: { "X-Auth-Token": getAuthToken() },
+    complete: function () {
+      clearAuth();
+      location.href = "login.html";
+    },
+  });
+}
+
+function roleLabel(role) {
+  return { admin: "管理员", operator: "操作员", viewer: "访客" }[role] || role || "";
+}
+
+// 所有请求自动携带登录令牌，未登录时不带（接口会返回 401）
+$.ajaxSetup({
+  beforeSend: function (xhr) {
+    const token = getAuthToken();
+    if (token) xhr.setRequestHeader("X-Auth-Token", token);
+  },
+});
+
 function fmtTime(ts) {
   if (!ts) return "--";
   const d = new Date(ts * 1000);

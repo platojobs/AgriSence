@@ -7,9 +7,11 @@ AgriSense 后端主应用
 
 import json
 import hashlib
+import functools
 import random
 import threading
 import time
+import uuid
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -34,6 +36,8 @@ from database import (
     get_knowledge, get_knowledge_article,
     get_news, get_news_article,
     insert_feedback,
+    get_users, get_user, get_user_by_username, create_user, update_user, delete_user,
+    touch_user_login, create_session, get_session, delete_session, clean_expired_sessions,
 )
 from irrigation_logic import decide
 from weather_service import get_weather, rain_summary
@@ -157,6 +161,200 @@ def _rule_engine_loop():
         except Exception as e:
             print("rule engine error:", e)
         time.sleep(30)
+
+
+# ---------------------------------------------------------------------------
+# 用户认证与权限
+# 角色：admin（管理员）> operator（操作员）> viewer（访客）
+# ---------------------------------------------------------------------------
+SESSION_TTL = 7 * 24 * 3600  # 会话有效期 7 天
+ROLE_LEVEL = {"viewer": 1, "operator": 2, "admin": 3}
+ROLE_LABELS = {"admin": "管理员", "operator": "操作员", "viewer": "访客"}
+
+
+def hash_password(password, salt=None):
+    """PBKDF2-HMAC-SHA256 加盐哈希，返回 (hash_hex, salt)。"""
+    salt = salt or uuid.uuid4().hex[:16]
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt.encode("utf-8"), 120000
+    ).hex()
+    return digest, salt
+
+
+def _current_session():
+    """从请求头 X-Auth-Token 解析当前会话。"""
+    return get_session(request.headers.get("X-Auth-Token"))
+
+
+def require_role(min_role="viewer"):
+    """接口权限装饰器：要求登录且角色不低于 min_role。"""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            session = _current_session()
+            if not session:
+                return jsonify({"status": "error", "message": "请先登录"}), 401
+            if ROLE_LEVEL.get(session["role"], 0) < ROLE_LEVEL.get(min_role, 0):
+                return jsonify({
+                    "status": "error",
+                    "message": "权限不足，需要%s及以上角色" % ROLE_LABELS.get(min_role, min_role),
+                }), 403
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+@app.route("/api/auth/login", methods=["POST"])
+def api_login():
+    """登录。body: {"username": "...", "password": "..."}"""
+    data = request.get_json(silent=True) or request.form
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    if not username or not password:
+        return jsonify({"status": "error", "message": "用户名和密码不能为空"}), 400
+
+    user = get_user_by_username(username)
+    if not user:
+        return jsonify({"status": "error", "message": "用户名或密码错误"}), 401
+    if user.get("status") != "active":
+        return jsonify({"status": "error", "message": "该账号已被禁用，请联系管理员"}), 403
+
+    digest, _ = hash_password(password, user["salt"])
+    if digest != user["password_hash"]:
+        return jsonify({"status": "error", "message": "用户名或密码错误"}), 401
+
+    token = uuid.uuid4().hex
+    expires_at = int(time.time()) + SESSION_TTL
+    create_session(token, username, user["role"], expires_at)
+    touch_user_login(username)
+    clean_expired_sessions()
+
+    return jsonify({
+        "status": "ok",
+        "token": token,
+        "expires_at": expires_at,
+        "user": {
+            "username": user["username"],
+            "display_name": user["display_name"],
+            "role": user["role"],
+            "role_label": ROLE_LABELS.get(user["role"], user["role"]),
+        },
+    })
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+def api_logout():
+    """退出登录。"""
+    delete_session(request.headers.get("X-Auth-Token"))
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/auth/me", methods=["GET"])
+def api_me():
+    """当前登录用户。"""
+    session = _current_session()
+    if not session:
+        return jsonify({"status": "error", "message": "未登录"}), 401
+    user = get_user_by_username(session["username"])
+    if not user:
+        return jsonify({"status": "error", "message": "用户不存在"}), 401
+    user.pop("password_hash", None)
+    user.pop("salt", None)
+    user["role_label"] = ROLE_LABELS.get(user["role"], user["role"])
+    return jsonify({"status": "ok", "user": user})
+
+
+# ---------------------------------------------------------------------------
+# 用户管理 API（仅管理员）
+# ---------------------------------------------------------------------------
+@app.route("/api/users", methods=["GET"])
+@require_role("admin")
+def api_users_list():
+    """用户列表。"""
+    users = get_users()
+    for u in users:
+        u["role_label"] = ROLE_LABELS.get(u["role"], u["role"])
+    return jsonify(users)
+
+
+@app.route("/api/users", methods=["POST"])
+@require_role("admin")
+def api_user_create():
+    """新增用户。body: {"username","password","display_name","role"}"""
+    data = request.get_json(silent=True) or request.form
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    role = data.get("role") or "viewer"
+
+    if not username or len(username) < 3:
+        return jsonify({"status": "error", "message": "用户名至少 3 个字符"}), 400
+    if len(password) < 6:
+        return jsonify({"status": "error", "message": "密码至少 6 个字符"}), 400
+    if role not in ROLE_LEVEL:
+        return jsonify({"status": "error", "message": "角色不合法"}), 400
+    if get_user_by_username(username):
+        return jsonify({"status": "error", "message": "用户名已存在"}), 400
+
+    digest, salt = hash_password(password)
+    user_id = create_user(username, digest, salt, data.get("display_name") or username, role)
+    return jsonify({"status": "ok", "id": user_id})
+
+
+@app.route("/api/users/<int:user_id>", methods=["PUT"])
+@require_role("admin")
+def api_user_update(user_id):
+    """修改用户角色 / 状态 / 姓名 / 密码。"""
+    session = _current_session()
+    target = get_user(user_id)
+    if not target:
+        return jsonify({"status": "error", "message": "用户不存在"}), 404
+
+    data = request.get_json(silent=True) or request.form
+    role = data.get("role")
+    status = data.get("status")
+    display_name = data.get("display_name")
+    password = data.get("password")
+
+    if role is not None and role not in ROLE_LEVEL:
+        return jsonify({"status": "error", "message": "角色不合法"}), 400
+    if status is not None and status not in ("active", "disabled"):
+        return jsonify({"status": "error", "message": "状态不合法"}), 400
+    # 防止管理员把自己降级或禁用
+    if target["username"] == session["username"]:
+        if role is not None and role != "admin":
+            return jsonify({"status": "error", "message": "不能修改自己的管理员角色"}), 400
+        if status == "disabled":
+            return jsonify({"status": "error", "message": "不能禁用自己的账号"}), 400
+
+    password_hash = salt = None
+    if password:
+        if len(password) < 6:
+            return jsonify({"status": "error", "message": "密码至少 6 个字符"}), 400
+        password_hash, salt = hash_password(password)
+
+    update_user(user_id, role=role, status=status, display_name=display_name,
+                password_hash=password_hash, salt=salt)
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/users/<int:user_id>", methods=["DELETE"])
+@require_role("admin")
+def api_user_delete(user_id):
+    """删除用户。"""
+    session = _current_session()
+    target = get_user(user_id)
+    if not target:
+        return jsonify({"status": "error", "message": "用户不存在"}), 404
+    if target["username"] == session["username"]:
+        return jsonify({"status": "error", "message": "不能删除自己的账号"}), 400
+
+    admin_count = len([u for u in get_users()
+                       if u["role"] == "admin" and u["status"] == "active"])
+    if target["role"] == "admin" and admin_count <= 1:
+        return jsonify({"status": "error", "message": "至少需要保留一个可用管理员"}), 400
+
+    delete_user(user_id)
+    return jsonify({"status": "ok"})
 
 
 # ---------------------------------------------------------------------------

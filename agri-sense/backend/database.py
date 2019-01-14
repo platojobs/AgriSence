@@ -167,6 +167,30 @@ def init_db():
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # 用户表：角色 admin（管理员）/ operator（操作员）/ viewer（访客）
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                display_name TEXT,
+                role TEXT DEFAULT 'viewer',
+                status TEXT DEFAULT 'active',
+                last_login TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # 登录会话表：前端用 X-Auth-Token 携带
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                role TEXT NOT NULL,
+                expires_at INTEGER NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         conn.commit()
 
 
@@ -648,4 +672,151 @@ def insert_feedback(name, contact, type_, message):
             "INSERT INTO feedback (name, contact, type, message) VALUES (?, ?, ?, ?)",
             (name, contact, type_, message)
         )
+        conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# 用户与会话
+# ---------------------------------------------------------------------------
+def _row_to_user(row):
+    """把 users 行转成 dict（不含密码哈希与盐）。"""
+    if row is None:
+        return None
+    return {
+        "id": row["id"],
+        "username": row["username"],
+        "display_name": row["display_name"],
+        "role": row["role"],
+        "status": row["status"],
+        "last_login": row["last_login"],
+        "created_at": row["created_at"],
+    }
+
+
+def get_users():
+    """用户列表。"""
+    with _get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM users ORDER BY id ASC"
+        ).fetchall()
+    return [_row_to_user(r) for r in rows]
+
+
+def get_user_by_username(username):
+    """按用户名查用户（含密码哈希，仅供登录校验使用）。"""
+    with _get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE username = ?", (username,)
+        ).fetchone()
+    if row is None:
+        return None
+    user = _row_to_user(row)
+    user["password_hash"] = row["password_hash"]
+    user["salt"] = row["salt"]
+    return user
+
+
+def get_user(user_id):
+    """按 ID 查用户。"""
+    with _get_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    return _row_to_user(row)
+
+
+def create_user(username, password_hash, salt, display_name=None,
+                role="viewer", status="active"):
+    """新增用户，返回新用户 ID。"""
+    with _get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO users (username, password_hash, salt, display_name, role, status) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (username, password_hash, salt, display_name or username, role, status)
+        )
+        conn.commit()
+        return cur.lastrowid
+
+
+def update_user(user_id, role=None, status=None, display_name=None,
+                password_hash=None, salt=None):
+    """更新用户信息（只更新传入的字段）。"""
+    fields = []
+    values = []
+    if role is not None:
+        fields.append("role = ?")
+        values.append(role)
+    if status is not None:
+        fields.append("status = ?")
+        values.append(status)
+    if display_name is not None:
+        fields.append("display_name = ?")
+        values.append(display_name)
+    if password_hash is not None:
+        fields.append("password_hash = ?")
+        values.append(password_hash)
+    if salt is not None:
+        fields.append("salt = ?")
+        values.append(salt)
+    if not fields:
+        return False
+    values.append(user_id)
+    with _get_conn() as conn:
+        conn.execute("UPDATE users SET " + ", ".join(fields) + " WHERE id = ?", values)
+        conn.commit()
+        return True
+
+
+def delete_user(user_id):
+    """删除用户。"""
+    with _get_conn() as conn:
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+
+
+def touch_user_login(username):
+    """记录最近登录时间。"""
+    with _get_conn() as conn:
+        conn.execute(
+            "UPDATE users SET last_login = datetime('now', 'localtime') WHERE username = ?",
+            (username,)
+        )
+        conn.commit()
+
+
+def create_session(token, username, role, expires_at):
+    """创建登录会话。"""
+    with _get_conn() as conn:
+        conn.execute(
+            "INSERT INTO sessions (token, username, role, expires_at) VALUES (?, ?, ?, ?)",
+            (token, username, role, expires_at)
+        )
+        conn.commit()
+
+
+def get_session(token):
+    """取会话，过期返回 None。"""
+    if not token:
+        return None
+    with _get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM sessions WHERE token = ?", (token,)
+        ).fetchone()
+    if row is None:
+        return None
+    if row["expires_at"] < int(time.time()):
+        delete_session(token)
+        return None
+    return {"token": row["token"], "username": row["username"], "role": row["role"]}
+
+
+def delete_session(token):
+    """删除会话（退出登录）。"""
+    with _get_conn() as conn:
+        conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        conn.commit()
+
+
+def clean_expired_sessions():
+    """清理过期会话。"""
+    with _get_conn() as conn:
+        conn.execute("DELETE FROM sessions WHERE expires_at < ?", (int(time.time()),))
         conn.commit()
