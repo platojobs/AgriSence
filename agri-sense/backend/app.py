@@ -38,6 +38,8 @@ from database import (
     insert_feedback,
     get_users, get_user, get_user_by_username, create_user, update_user, delete_user,
     touch_user_login, create_session, get_session, delete_session, clean_expired_sessions,
+    get_environment_daily, get_irrigation_stats, get_alert_stats,
+    get_farm_activity_stats, get_batch_stats,
 )
 from irrigation_logic import decide
 from weather_service import get_weather, rain_summary
@@ -710,6 +712,83 @@ def api_batch_quality(batch_no):
 def api_stats_overview():
     """系统概览统计。"""
     return jsonify(get_overview_stats())
+
+
+# ---------------------------------------------------------------------------
+# 统计报表 API（操作员及以上可访问）
+# ---------------------------------------------------------------------------
+def _parse_days():
+    raw = request.args.get("days", "7")
+    try:
+        d = int(raw)
+        if d < 1: d = 1
+        if d > 365: d = 365
+    except Exception:
+        d = 7
+    return d
+
+
+@app.route("/api/reports/dashboard", methods=["GET"])
+@require_role("operator")
+def api_reports_dashboard():
+    """综合统计卡片：近 N 天读数总量、平均墒情、平均温度、灌溉次数、告警数、批次。"""
+    days = _parse_days()
+    stats = get_overview_stats(hours=days * 24)
+    env = get_environment_daily(days=days)
+    # 平均墒情取时间序列的平均（跳过 None）
+    moist_vals = [v for v in env["avg_moisture"] if v is not None]
+    temp_vals = [v for v in env["avg_temp"] if v is not None]
+    avg_moisture = round(sum(moist_vals) / len(moist_vals), 1) if moist_vals else None
+    avg_temp = round(sum(temp_vals) / len(temp_vals), 1) if temp_vals else None
+    irr = get_irrigation_stats(days=days)
+    alerts = get_alert_stats(days=days)
+    batches = get_batch_stats()
+    return jsonify({
+        "reading_count": stats["reading_count"],
+        "device_count": stats["device_count"],
+        "avg_moisture": avg_moisture,
+        "avg_temperature": avg_temp,
+        "irrigation_start": irr["total_start"],
+        "irrigation_stop": irr["total_stop"],
+        "alert_total": alerts["total"],
+        "batch_count": sum([b["value"] for b in batches["status_distribution"]]),
+        "days": days,
+    })
+
+
+@app.route("/api/reports/environment", methods=["GET"])
+@require_role("operator")
+def api_reports_environment():
+    """按天环境指标均值 / 极值。"""
+    return jsonify(get_environment_daily(days=_parse_days()))
+
+
+@app.route("/api/reports/irrigation", methods=["GET"])
+@require_role("operator")
+def api_reports_irrigation():
+    """灌溉次数按天分布 + 最近 30 条日志。"""
+    return jsonify(get_irrigation_stats(days=_parse_days()))
+
+
+@app.route("/api/reports/alerts", methods=["GET"])
+@require_role("operator")
+def api_reports_alerts():
+    """告警等级分布 + 类型分布 + 按天趋势。"""
+    return jsonify(get_alert_stats(days=_parse_days()))
+
+
+@app.route("/api/reports/farm", methods=["GET"])
+@require_role("operator")
+def api_reports_farm():
+    """农事活动类型分布。"""
+    return jsonify(get_farm_activity_stats())
+
+
+@app.route("/api/reports/batch", methods=["GET"])
+@require_role("operator")
+def api_reports_batch():
+    """溯源批次质量状态分布 + 作物类型分布。"""
+    return jsonify(get_batch_stats())
 
 
 @app.route("/api/rules/evaluate", methods=["POST"])

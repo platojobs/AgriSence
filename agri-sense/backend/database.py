@@ -820,3 +820,197 @@ def clean_expired_sessions():
     with _get_conn() as conn:
         conn.execute("DELETE FROM sessions WHERE expires_at < ?", (int(time.time()),))
         conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# 统计报表聚合函数
+# ---------------------------------------------------------------------------
+
+def _day_bounds(days=7):
+    """返回 [start_ts, end_ts, daily_start_ts_list]。"""
+    now = int(time.time())
+    # 以天为粒度，对齐到当日 00:00
+    today_zero = now - (now % 86400)
+    end_ts = now
+    start_ts = today_zero - (days - 1) * 86400
+    # 每天的起始时间戳，便于前端 x 轴渲染
+    daily_ts = [start_ts + i * 86400 for i in range(days)]
+    return start_ts, end_ts, daily_ts
+
+
+def _day_label(ts):
+    """时间戳 -> 'MM-DD'。"""
+    lt = time.localtime(ts)
+    return "%02d-%02d" % (lt.tm_mon, lt.tm_mday)
+
+
+def get_environment_daily(days=7):
+    """按天返回环境指标均值序列。"""
+    start_ts, end_ts, daily_ts = _day_bounds(days)
+    with _get_conn() as conn:
+        rows = conn.execute("""
+            SELECT (timestamp / 86400) * 86400 AS day_ts,
+                   AVG(soil_moisture) AS avg_moisture,
+                   MIN(soil_moisture) AS min_moisture,
+                   MAX(soil_moisture) AS max_moisture,
+                   AVG(temperature)    AS avg_temp,
+                   MIN(temperature)    AS min_temp,
+                   MAX(temperature)    AS max_temp,
+                   AVG(humidity)       AS avg_hum,
+                   AVG(light)          AS avg_light
+            FROM sensor_readings
+            WHERE timestamp >= ? AND timestamp <= ?
+            GROUP BY day_ts
+            ORDER BY day_ts ASC
+        """, (start_ts, end_ts)).fetchall()
+
+    bucket = {r["day_ts"]: r for r in rows}
+    labels = []
+    moisture, temp, hum, light = [], [], [], []
+    min_moisture, max_moisture = [], []
+    for dts in daily_ts:
+        labels.append(_day_label(dts))
+        r = bucket.get(dts)
+        if r is None:
+            moisture.append(None); temp.append(None); hum.append(None); light.append(None)
+            min_moisture.append(None); max_moisture.append(None)
+        else:
+            # round 到 1 位小数；None 保护（有些字段可能全 NULL）
+            def _round(v):
+                return round(v, 1) if v is not None else None
+            moisture.append(_round(r["avg_moisture"]))
+            min_moisture.append(_round(r["min_moisture"]))
+            max_moisture.append(_round(r["max_moisture"]))
+            temp.append(_round(r["avg_temp"]))
+            hum.append(_round(r["avg_hum"]))
+            light.append(int(r["avg_light"]) if r["avg_light"] is not None else None)
+    return {
+        "labels": labels,
+        "daily_ts": daily_ts,
+        "avg_moisture": moisture,
+        "min_moisture": min_moisture,
+        "max_moisture": max_moisture,
+        "avg_temp": temp,
+        "avg_humidity": hum,
+        "avg_light": light,
+    }
+
+
+def get_irrigation_stats(days=7):
+    """灌溉统计：按天 start 次数 + 所有 start/stop 列表。"""
+    start_ts, end_ts, daily_ts = _day_bounds(days)
+    with _get_conn() as conn:
+        # 按天统计 start 次数
+        rows = conn.execute("""
+            SELECT (strftime('%s', created_at) / 86400) * 86400 AS day_ts,
+                   COUNT(*) AS cnt
+            FROM irrigation_logs
+            WHERE action='start'
+            GROUP BY day_ts
+            ORDER BY day_ts ASC
+        """).fetchall()
+        all_logs = conn.execute("""
+            SELECT action, reason, created_at
+            FROM irrigation_logs
+            ORDER BY id DESC
+            LIMIT 500
+        """).fetchall()
+        # 期间内的 start 次数
+        total_start = conn.execute("""
+            SELECT COUNT(*) AS c FROM irrigation_logs WHERE action='start'
+        """).fetchone()["c"]
+        total_stop = conn.execute("""
+            SELECT COUNT(*) AS c FROM irrigation_logs WHERE action='stop'
+        """).fetchone()["c"]
+
+    bucket = {r["day_ts"]: r["cnt"] for r in rows}
+    labels = [_day_label(dts) for dts in daily_ts]
+    counts = [bucket.get(dts, 0) for dts in daily_ts]
+
+    recent = []
+    # irrigation_logs.created_at 是 TEXT (CURRENT_TIMESTAMP)，用 strptime 解析
+    for log in all_logs:
+        recent.append({
+            "action": log["action"],
+            "reason": log["reason"],
+            "created_at": log["created_at"],
+        })
+
+    return {
+        "labels": labels,
+        "daily_start": counts,
+        "total_start": total_start,
+        "total_stop": total_stop,
+        "recent": recent[:30],
+    }
+
+
+def get_alert_stats(days=7):
+    """告警统计：等级分布 + 类型分布 + 按天数量。"""
+    start_ts, end_ts, daily_ts = _day_bounds(days)
+    with _get_conn() as conn:
+        level_rows = conn.execute("""
+            SELECT level, COUNT(*) AS c FROM alerts GROUP BY level
+        """).fetchall()
+        type_rows = conn.execute("""
+            SELECT type, COUNT(*) AS c FROM alerts GROUP BY type ORDER BY c DESC LIMIT 10
+        """).fetchall()
+        trend_rows = conn.execute("""
+            SELECT (strftime('%s', created_at) / 86400) * 86400 AS day_ts,
+                   COUNT(*) AS c
+            FROM alerts
+            GROUP BY day_ts
+            ORDER BY day_ts ASC
+        """).fetchall()
+
+    level_map = {"critical": "严重", "warning": "警告", "info": "提示"}
+    level_dist = [
+        {"name": level_map.get(r["level"], r["level"]), "value": r["c"], "raw": r["level"]}
+        for r in level_rows
+    ]
+    type_dist = [{"name": r["type"], "value": r["c"]} for r in type_rows]
+
+    bucket = {r["day_ts"]: r["c"] for r in trend_rows}
+    labels = [_day_label(dts) for dts in daily_ts]
+    trend = [bucket.get(dts, 0) for dts in daily_ts]
+
+    return {
+        "level_distribution": level_dist,
+        "type_distribution": type_dist,
+        "labels": labels,
+        "trend": trend,
+        "total": sum([d["value"] for d in level_dist]),
+    }
+
+
+def get_farm_activity_stats():
+    """农事活动类型分布。"""
+    with _get_conn() as conn:
+        rows = conn.execute("""
+            SELECT type, COUNT(*) AS c FROM farm_logs GROUP BY type ORDER BY c DESC
+        """).fetchall()
+    return [{"name": r["type"], "value": r["c"]} for r in rows]
+
+
+def get_batch_stats():
+    """溯源批次质量状态分布 + 作物类型分布。"""
+    with _get_conn() as conn:
+        status_rows = conn.execute("""
+            SELECT quality_status, COUNT(*) AS c FROM traceability_batches GROUP BY quality_status
+        """).fetchall()
+        crop_rows = conn.execute("""
+            SELECT crop_name, COUNT(*) AS c FROM traceability_batches GROUP BY crop_name ORDER BY c DESC
+        """).fetchall()
+    status_map = {
+        "qualified": "已合格",
+        "unqualified": "不合格",
+        "pending": "待质检",
+        "harvested": "已采收",
+    }
+    status_dist = [
+        {"name": status_map.get(r["quality_status"], r["quality_status"]),
+         "value": r["c"], "raw": r["quality_status"]}
+        for r in status_rows
+    ]
+    crop_dist = [{"name": r["crop_name"], "value": r["c"]} for r in crop_rows]
+    return {"status_distribution": status_dist, "crop_distribution": crop_dist}
