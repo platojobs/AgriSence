@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>后台内容管理 - AgriSense</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet" />
+  <link href="css/style.css" rel="stylesheet" />
+  <link href="css/layout.css" rel="stylesheet" />
+  <style>
+    .perm-box { padding: 60px 20px; text-align:center; color:#555; }
+    .perm-box i { font-size:52px; color:#ccc; }
+    .cms-tab-bar .nav-link { font-size:14px; padding:8px 18px; color:#555; border-radius:20px; margin-right:8px; }
+    .cms-tab-bar .nav-link.active { background:#2e7d32; color:#fff; }
+    .cms-table { font-size:13px; }
+    .cms-table th { background:#f6f8f7; font-weight:600; white-space:nowrap; }
+    .cms-table td { vertical-align:middle; }
+    .cms-table .title-cell { max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .cms-table .btn-xs { padding:2px 8px; font-size:11.5px; border-radius:12px; }
+    .status-badge { font-size:11px; padding:2px 8px; border-radius:10px; }
+    .status-pending { background:#fff4e0; color:#b7791f; }
+    .status-resolved { background:#e6f4ea; color:#2e7d32; }
+    .status-ignored { background:#eee; color:#666; }
+    .top-pill { font-size:11px; padding:2px 8px; border-radius:10px; background:#c0392b; color:#fff; }
+    .cat-pill { font-size:11px; padding:2px 8px; border-radius:10px; background:#e8f0ea; color:#2e7d32; }
+    .modal-body label { font-size:12.5px; color:#555; margin-bottom:3px; }
+  </style>
+</head>
+<body>
+  <div id="app-root">
+
+    <!-- 权限框 -->
+    <div id="perm-box" style="display:none;" class="sensor-card perm-box">
+      <i class="bi bi-shield-lock"></i>
+      <h5 class="mt-3 mb-2">访问受限</h5>
+      <p class="text-muted small mb-3">后台内容管理需要管理员权限。</p>
+      <a href="login.html?redirect=cms.html" class="btn btn-success btn-sm"><i class="bi bi-box-arrow-in-right me-1"></i> 去登录</a>
+      <a href="index.html" class="btn btn-outline-secondary btn-sm ms-2">返回首页</a>
+    </div>
+
+    <!-- 主体 -->
+    <div id="cms-box">
+
+      <!-- Tab 切换 -->
+      <div class="sensor-card mb-3">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div>
+            <h5 class="m-0"><i class="bi bi-sliders text-success me-2"></i>后台内容管理</h5>
+            <small class="text-muted">知识库 / 新闻 / 客服留言 / 站点信息 — 一站式 CRUD</small>
+          </div>
+        </div>
+        <ul class="nav nav-pills cms-tab-bar mt-3" id="cms-tabs">
+          <li class="nav-item"><a class="nav-link active" data-tab="knowledge" href="#">知识库</a></li>
+          <li class="nav-item"><a class="nav-link" data-tab="news" href="#">新闻资讯</a></li>
+          <li class="nav-item"><a class="nav-link" data-tab="feedback" href="#">客服留言</a></li>
+          <li class="nav-item"><a class="nav-link" data-tab="site" href="#">站点信息</a></li>
+        </ul>
+      </div>
+
+      <!-- 知识库 -->
+      <div class="sensor-card mb-3" id="tab-knowledge">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="m-0">知识文章</h6>
+          <button class="btn btn-sm btn-success" id="btn-knowledge-add"><i class="bi bi-plus-circle me-1"></i>新增文章</button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover cms-table">
+            <thead><tr><th>ID</th><th>分类</th><th>标题</th><th>作者</th><th>阅读</th><th>创建时间</th><th>操作</th></tr></thead>
+            <tbody id="knowledge-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 新闻 -->
+      <div class="sensor-card mb-3" id="tab-news" style="display:none;">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="m-0">新闻资讯</h6>
+          <button class="btn btn-sm btn-success" id="btn-news-add"><i class="bi bi-plus-circle me-1"></i>新增新闻</button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover cms-table">
+            <thead><tr><th>ID</th><th>置顶</th><th>分类</th><th>标题</th><th>来源</th><th>阅读</th><th>创建时间</th><th>操作</th></tr></thead>
+            <tbody id="news-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 客服留言 -->
+      <div class="sensor-card mb-3" id="tab-feedback" style="display:none;">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="m-0">客服留言</h6>
+          <div>
+            <span class="text-muted small me-2">状态：</span>
+            <div class="btn-group btn-group-sm" id="fb-status-group">
+              <button class="btn btn-outline-success active" data-status="">全部</button>
+              <button class="btn btn-outline-success" data-status="pending">待处理</button>
+              <button class="btn btn-outline-success" data-status="resolved">已处理</button>
+            </div>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover cms-table">
+            <thead><tr><th>ID</th><th>状态</th><th>姓名</th><th>联系方式</th><th>类型</th><th>留言</th><th>时间</th><th>操作</th></tr></thead>
+            <tbody id="feedback-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 站点信息 -->
+      <div class="sensor-card mb-3" id="tab-site" style="display:none;">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="m-0">站点可编辑条目</h6>
+          <button class="btn btn-sm btn-success" id="btn-site-add"><i class="bi bi-plus-circle me-1"></i>新增条目</button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover cms-table">
+            <thead><tr><th>Key</th><th>标题</th><th>内容预览</th><th>最近更新</th><th>操作</th></tr></thead>
+            <tbody id="site-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 通用 Modal（知识/新闻/站点） -->
+  <div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editModalTitle">编辑</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="editModalBody"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="button" class="btn btn-sm btn-success" id="editModalSave"><i class="bi bi-check me-1"></i>保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 通用 Toast 容器 -->
+  <div id="toast-box" style="position:fixed;top:20px;right:20px;z-index:9999;"></div>
+
+  <script>window.PAGE_CONFIG = { key: "cms", title: "后台内容管理", icon: "bi-sliders" };</script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/dashboard.js?v=4"></script>
+  <script src="js/cms.js?v=1"></script>
+  <script src="js/layout.js?v=8"></script>
+</body>
+</html>

@@ -164,7 +164,18 @@ def init_db():
                 contact TEXT,
                 type TEXT,
                 message TEXT,
+                status TEXT DEFAULT 'pending',
+                reply TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # 站点内容表：FAQ、关于我们、隐私政策、服务条款等
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS site_contents (
+                key TEXT PRIMARY KEY,
+                title TEXT,
+                content TEXT,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
         # 用户表：角色 admin（管理员）/ operator（操作员）/ viewer（访客）
@@ -617,6 +628,35 @@ def insert_knowledge(category, title, summary, content, author="农技专家"):
         conn.commit()
 
 
+def update_knowledge(article_id, category=None, title=None, summary=None,
+                     content=None, author=None):
+    """更新知识库文章（只更新传入的字段）。"""
+    fields = []
+    vals = []
+    if category is not None: fields.append("category=?"); vals.append(category)
+    if title is not None: fields.append("title=?"); vals.append(title)
+    if summary is not None: fields.append("summary=?"); vals.append(summary)
+    if content is not None: fields.append("content=?"); vals.append(content)
+    if author is not None: fields.append("author=?"); vals.append(author)
+    if not fields: return None
+    vals.append(article_id)
+    with _get_conn() as conn:
+        conn.execute(
+            "UPDATE knowledge_articles SET " + ", ".join(fields) + " WHERE id=?", vals
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM knowledge_articles WHERE id=?",
+                           (article_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def delete_knowledge(article_id):
+    """删除知识库文章。"""
+    with _get_conn() as conn:
+        conn.execute("DELETE FROM knowledge_articles WHERE id=?", (article_id,))
+        conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # 农业新闻
 # ---------------------------------------------------------------------------
@@ -662,6 +702,44 @@ def insert_news(category, title, summary, content, source="AgriSense 资讯", is
         conn.commit()
 
 
+def update_news(news_id, category=None, title=None, summary=None,
+                 content=None, source=None, is_top=None):
+    """更新新闻（只更新传入的字段）。"""
+    fields = []
+    vals = []
+    if category is not None: fields.append("category=?"); vals.append(category)
+    if title is not None: fields.append("title=?"); vals.append(title)
+    if summary is not None: fields.append("summary=?"); vals.append(summary)
+    if content is not None: fields.append("content=?"); vals.append(content)
+    if source is not None: fields.append("source=?"); vals.append(source)
+    if is_top is not None: fields.append("is_top=?"); vals.append(is_top)
+    if not fields: return None
+    vals.append(news_id)
+    with _get_conn() as conn:
+        conn.execute(
+            "UPDATE news_articles SET " + ", ".join(fields) + " WHERE id=?", vals
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM news_articles WHERE id=?",
+                           (news_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def delete_news(news_id):
+    """删除新闻。"""
+    with _get_conn() as conn:
+        conn.execute("DELETE FROM news_articles WHERE id=?", (news_id,))
+        conn.commit()
+
+
+def toggle_news_top(news_id, is_top):
+    """切换新闻置顶。"""
+    with _get_conn() as conn:
+        conn.execute("UPDATE news_articles SET is_top=? WHERE id=?",
+                     (1 if is_top else 0, news_id))
+        conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # 客服留言
 # ---------------------------------------------------------------------------
@@ -672,6 +750,91 @@ def insert_feedback(name, contact, type_, message):
             "INSERT INTO feedback (name, contact, type, message) VALUES (?, ?, ?, ?)",
             (name, contact, type_, message)
         )
+        conn.commit()
+
+
+def get_feedback_list(limit=100, status=None):
+    """返回客服留言列表，可按状态过滤。"""
+    with _get_conn() as conn:
+        if status:
+            rows = conn.execute(
+                "SELECT * FROM feedback WHERE status=? ORDER BY id DESC LIMIT ?",
+                (status, limit)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM feedback ORDER BY id DESC LIMIT ?", (limit,)
+            ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def mark_feedback(feedback_id, status, reply=None):
+    """处理客服留言（pending→resolved 等）。"""
+    with _get_conn() as conn:
+        if reply is not None:
+            conn.execute(
+                "UPDATE feedback SET status=?, reply=? WHERE id=?",
+                (status, reply, feedback_id)
+            )
+        else:
+            conn.execute(
+                "UPDATE feedback SET status=? WHERE id=?", (status, feedback_id)
+            )
+        conn.commit()
+
+
+def delete_feedback(feedback_id):
+    """删除客服留言。"""
+    with _get_conn() as conn:
+        conn.execute("DELETE FROM feedback WHERE id=?", (feedback_id,))
+        conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# 站点内容管理（FAQ / 关于我们 / 隐私政策 / 服务条款等）
+# ---------------------------------------------------------------------------
+def get_site_content(key):
+    """按 key 返回站点内容，不存在返回 None。"""
+    with _get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM site_contents WHERE key=?", (key,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def list_site_contents():
+    """返回所有站点内容条目。"""
+    with _get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM site_contents ORDER BY key ASC"
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def upsert_site_content(key, title, content):
+    """插入或更新站点内容。"""
+    with _get_conn() as conn:
+        existing = conn.execute(
+            "SELECT key FROM site_contents WHERE key=?", (key,)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE site_contents SET title=?, content=?, updated_at=CURRENT_TIMESTAMP "
+                "WHERE key=?",
+                (title, content, key)
+            )
+        else:
+            conn.execute(
+                "INSERT INTO site_contents (key, title, content) VALUES (?, ?, ?)",
+                (key, title, content)
+            )
+        conn.commit()
+
+
+def delete_site_content(key):
+    """删除站点内容。"""
+    with _get_conn() as conn:
+        conn.execute("DELETE FROM site_contents WHERE key=?", (key,))
         conn.commit()
 
 

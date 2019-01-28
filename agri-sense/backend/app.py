@@ -33,9 +33,12 @@ from database import (
     get_actuators, get_actuator, update_actuator, upsert_actuator,
     get_farm_logs, insert_farm_log, delete_farm_log,
     get_batches, get_batch, insert_batch, update_batch_quality,
-    get_knowledge, get_knowledge_article,
-    get_news, get_news_article,
-    insert_feedback,
+    get_knowledge, get_knowledge_article, insert_knowledge,
+    update_knowledge, delete_knowledge,
+    get_news, get_news_article, insert_news,
+    update_news, delete_news, toggle_news_top,
+    insert_feedback, get_feedback_list, mark_feedback, delete_feedback,
+    get_site_content, list_site_contents, upsert_site_content, delete_site_content,
     get_users, get_user, get_user_by_username, create_user, update_user, delete_user,
     touch_user_login, create_session, get_session, delete_session, clean_expired_sessions,
     get_environment_daily, get_irrigation_stats, get_alert_stats,
@@ -890,6 +893,186 @@ def api_feedback_create():
         data.get("type", "产品咨询"),
         data["message"],
     )
+    return jsonify({"status": "ok"})
+
+
+# ---------------------------------------------------------------------------
+# CMS 后台接口（管理员专属）
+# ---------------------------------------------------------------------------
+
+# ---- 知识库 ----
+
+@app.route("/api/cms/knowledge", methods=["GET"])
+@require_role("admin")
+def api_cms_knowledge_list():
+    """知识库管理列表（含全文，默认 200 条）。"""
+    return jsonify(get_knowledge(limit=200))
+
+
+@app.route("/api/cms/knowledge", methods=["POST"])
+@require_role("admin")
+def api_cms_knowledge_create():
+    data = request.get_json(silent=True) or {}
+    title = data.get("title", "").strip()
+    content = data.get("content", "").strip()
+    if not title or not content:
+        return jsonify({"status": "error", "message": "标题与正文不能为空"}), 400
+    insert_knowledge(
+        data.get("category", "种植技术"),
+        title,
+        data.get("summary", content[:80]),
+        content,
+        data.get("author", "农技专家"),
+    )
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/cms/knowledge/<int:article_id>", methods=["PUT"])
+@require_role("admin")
+def api_cms_knowledge_update(article_id):
+    data = request.get_json(silent=True) or {}
+    row = update_knowledge(
+        article_id,
+        category=data.get("category"),
+        title=data.get("title"),
+        summary=data.get("summary"),
+        content=data.get("content"),
+        author=data.get("author"),
+    )
+    return jsonify({"status": "ok", "article": row})
+
+
+@app.route("/api/cms/knowledge/<int:article_id>", methods=["DELETE"])
+@require_role("admin")
+def api_cms_knowledge_delete(article_id):
+    delete_knowledge(article_id)
+    return jsonify({"status": "ok"})
+
+
+# ---- 新闻 ----
+
+@app.route("/api/cms/news", methods=["GET"])
+@require_role("admin")
+def api_cms_news_list():
+    return jsonify(get_news(limit=200))
+
+
+@app.route("/api/cms/news", methods=["POST"])
+@require_role("admin")
+def api_cms_news_create():
+    data = request.get_json(silent=True) or {}
+    title = data.get("title", "").strip()
+    content = data.get("content", "").strip()
+    if not title or not content:
+        return jsonify({"status": "error", "message": "标题与正文不能为空"}), 400
+    insert_news(
+        data.get("category", "行业动态"),
+        title,
+        data.get("summary", content[:80]),
+        content,
+        data.get("source", "AgriSense 资讯"),
+        1 if data.get("is_top") else 0,
+    )
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/cms/news/<int:news_id>", methods=["PUT"])
+@require_role("admin")
+def api_cms_news_update(news_id):
+    data = request.get_json(silent=True) or {}
+    is_top = None
+    if "is_top" in data:
+        is_top = 1 if data.get("is_top") else 0
+    row = update_news(
+        news_id,
+        category=data.get("category"),
+        title=data.get("title"),
+        summary=data.get("summary"),
+        content=data.get("content"),
+        source=data.get("source"),
+        is_top=is_top,
+    )
+    return jsonify({"status": "ok", "news": row})
+
+
+@app.route("/api/cms/news/<int:news_id>", methods=["DELETE"])
+@require_role("admin")
+def api_cms_news_delete(news_id):
+    delete_news(news_id)
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/cms/news/<int:news_id>/top", methods=["POST"])
+@require_role("admin")
+def api_cms_news_toggle_top(news_id):
+    data = request.get_json(silent=True) or {}
+    toggle_news_top(news_id, bool(data.get("is_top")))
+    return jsonify({"status": "ok"})
+
+
+# ---- 客服留言管理 ----
+
+@app.route("/api/cms/feedback", methods=["GET"])
+@require_role("admin")
+def api_cms_feedback_list():
+    status = request.args.get("status")
+    return jsonify(get_feedback_list(status=status))
+
+
+@app.route("/api/cms/feedback/<int:fb_id>/mark", methods=["POST"])
+@require_role("admin")
+def api_cms_feedback_mark(fb_id):
+    data = request.get_json(silent=True) or {}
+    mark_feedback(
+        fb_id,
+        data.get("status", "resolved"),
+        reply=data.get("reply"),
+    )
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/cms/feedback/<int:fb_id>", methods=["DELETE"])
+@require_role("admin")
+def api_cms_feedback_delete(fb_id):
+    delete_feedback(fb_id)
+    return jsonify({"status": "ok"})
+
+
+# ---- 站点内容管理（FAQ / 关于 / 隐私 / 服务条款） ----
+
+@app.route("/api/cms/site", methods=["GET"])
+@require_role("admin")
+def api_cms_site_list():
+    """返回所有可编辑站点内容条目。"""
+    return jsonify(list_site_contents())
+
+
+@app.route("/api/cms/site/<key>", methods=["GET"])
+def api_site_public_get(key):
+    """公开：站点内容条目（访客也能读，供 about/faq/privacy 页面用）。"""
+    row = get_site_content(key)
+    if row is None:
+        # 返回占位，让前端无数据时也能渲染默认
+        return jsonify({"key": key, "title": "", "content": ""})
+    return jsonify(row)
+
+
+@app.route("/api/cms/site/<key>", methods=["PUT"])
+@require_role("admin")
+def api_cms_site_upsert(key):
+    data = request.get_json(silent=True) or {}
+    title = data.get("title", "").strip()
+    content = data.get("content", "").strip()
+    if not title or not content:
+        return jsonify({"status": "error", "message": "标题与正文不能为空"}), 400
+    upsert_site_content(key, title, content)
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/cms/site/<key>", methods=["DELETE"])
+@require_role("admin")
+def api_cms_site_delete(key):
+    delete_site_content(key)
     return jsonify({"status": "ok"})
 
 

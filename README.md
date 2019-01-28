@@ -26,6 +26,7 @@
 | 移动端 H5 | 墒情环形图、环境参数、一键灌溉、告警推送 |
 | 用户与权限 | 管理员 / 操作员 / 访客三角色 RBAC、PBKDF2 加盐密码、会话令牌鉴权、用户管理页 |
 | 数据统计报表 | 环境日均值、灌溉活动、告警分布、农事记录、溯源批次多维图表；操作员及以上权限，支持近 7/14/30 天切换 |
+| 后台内容管理 | 知识库 / 新闻资讯 / 客服留言 / FAQ / 关于我们 / 隐私政策 一站式 CRUD；管理员专属 |
 
 ## 页面截图
 
@@ -76,6 +77,10 @@
 ### 数据统计报表
 
 ![数据统计报表](docs/screenshots/reports.png)
+
+### 后台内容管理
+
+![后台内容管理](docs/screenshots/cms.png)
 
 ## 系统架构
 
@@ -140,15 +145,15 @@ ESP32 固件位于 `agri-sense/firmware/`，修改 WiFi 与 MQTT Broker 地址�
 ```
 agri-sense/
 ├── backend/            # Flask 后端
-│   ├── app.py          #   REST API + MQTT 订阅 + 规则引擎 + 报表接口
-│   ├── database.py     #   SQLite 操作层（15 张表 + 聚合统计）
+│   ├── app.py          #   REST API + MQTT 订阅 + 规则引擎 + 报表接口 + CMS CRUD
+│   ├── database.py     #   SQLite 操作层（17 张表 + 聚合统计 + 内容管理函数）
 │   ├── config.py       #   配置（端口/MQTT/阈值）
 │   ├── irrigation_logic.py  # 灌溉决策（含天气联动）
 │   ├── weather_service.py   # 气象模型（可替换真实气象 API）
 │   └── seed_mock_data.py    # 演示数据生成
 ├── frontend/           # jQuery 多页面前端
 │   ├── js/layout.js    #   共享侧边栏 + 顶栏登录态 + 页脚布局
-│   └── *.html          #   20 个页面（含登录页、用户管理、数据报表）
+│   └── *.html          #   21 个页面（含登录、用户管理、报表、CMS）
 ├── firmware/           # ESP32 固件
 └── docs/screenshots/   # 页面截图
 ```
@@ -167,6 +172,7 @@ agri-sense/
 | v2.3 | 气象服务（6 城市 / 24 小时 / 7 天预报 / 农事指数）+ 天气驱动灌溉决策 |
 | v2.4 | 用户登录与权限体系（三角色 RBAC + PBKDF2 加盐密码 + 会话令牌 + 用户管理页） |
 | v2.5 | 数据统计报表（环境/灌溉/告警/农事/批次多维 ECharts 图 + 日期范围切换 + 操作员权限保护） |
+| v2.6 | 后台内容管理（知识库/新闻/留言/站点信息 CRUD + 管理员专属 CMS 接口） |
 
 ## License
 
