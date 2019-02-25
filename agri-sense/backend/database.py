@@ -1294,3 +1294,54 @@ def get_batch_stats():
     ]
     crop_dist = [{"name": r["crop_name"], "value": r["c"]} for r in crop_rows]
     return {"status_distribution": status_dist, "crop_distribution": crop_dist}
+
+
+# ---------------------------------------------------------------------------
+# 数据导出（CSV）
+# ---------------------------------------------------------------------------
+# 可导出的数据表白名单：data_type -> (表名, 时间过滤列)
+EXPORT_TABLES = {
+    "sensor_readings": ("sensor_readings", "created_at"),
+    "irrigation_logs": ("irrigation_logs", "created_at"),
+    "alerts": ("alerts", "created_at"),
+    "farm_logs": ("farm_logs", "created_at"),
+    "traceability_batches": ("traceability_batches", "created_at"),
+    "audit_logs": ("audit_logs", "created_at"),
+}
+
+
+def export_rows(data_type, start_date=None, end_date=None, limit=10000):
+    """
+    按数据类型导出记录（用于 CSV）。
+    - start_date/end_date: 'YYYY-MM-DD'，按 created_at 过滤（含当天）
+    - 返回 (columns, rows)，rows 为 list[tuple]
+    """
+    if data_type not in EXPORT_TABLES:
+        return None, None
+    table, time_col = EXPORT_TABLES[data_type]
+
+    sql = "SELECT * FROM %s WHERE 1=1" % table
+    params = []
+    if start_date:
+        sql += " AND date(%s) >= date(?)" % time_col
+        params.append(start_date)
+    if end_date:
+        sql += " AND date(%s) <= date(?)" % time_col
+        params.append(end_date)
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(min(limit, 50000))
+
+    with _get_conn() as conn:
+        cur = conn.execute(sql, params)
+        columns = [d[0] for d in cur.description]
+        rows = cur.fetchall()
+    return columns, [tuple(row) for row in rows]
+
+
+def export_count(data_type):
+    """各数据类型的可导出总条数（供导出中心展示）。"""
+    if data_type not in EXPORT_TABLES:
+        return 0
+    table, _ = EXPORT_TABLES[data_type]
+    with _get_conn() as conn:
+        return conn.execute("SELECT COUNT(*) AS c FROM %s" % table).fetchone()["c"]

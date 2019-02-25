@@ -8,12 +8,14 @@ AgriSense 后端主应用
 import json
 import hashlib
 import functools
+import io
+import csv
 import random
 import threading
 import time
 import uuid
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 import paho.mqtt.client as mqtt
 
@@ -43,6 +45,7 @@ from database import (
     touch_user_login, create_session, get_session, delete_session, clean_expired_sessions,
     insert_login_log, get_login_logs, update_user_password, delete_other_sessions,
     insert_audit_log, get_audit_logs, get_audit_stats,
+    export_rows, export_count, EXPORT_TABLES,
     get_environment_daily, get_irrigation_stats, get_alert_stats,
     get_farm_activity_stats, get_batch_stats,
 )
@@ -354,6 +357,81 @@ def api_audit_logs():
     logs = get_audit_logs(limit=limit, username=username, action=action, keyword=keyword)
     stats = get_audit_stats()
     return jsonify({"status": "ok", "logs": logs, "stats": stats})
+
+
+# ---------------------------------------------------------------------------
+# 数据导出中心 API（CSV 下载）
+# 业务数据 operator 及以上可导；audit_logs 仅 admin
+# ---------------------------------------------------------------------------
+EXPORT_META = {
+    "sensor_readings": {"label": "环境监测数据", "min_role": "operator"},
+    "irrigation_logs": {"label": "灌溉操作日志", "min_role": "operator"},
+    "alerts": {"label": "告警记录", "min_role": "operator"},
+    "farm_logs": {"label": "农事日志", "min_role": "operator"},
+    "traceability_batches": {"label": "溯源批次", "min_role": "operator"},
+    "audit_logs": {"label": "操作审计日志", "min_role": "admin"},
+}
+
+
+@app.route("/api/export/types", methods=["GET"])
+@require_role("operator")
+def api_export_types():
+    """列出当前角色可导出的数据类型及数据量。"""
+    session = _current_session()
+    level = ROLE_LEVEL.get(session["role"], 0)
+    types = []
+    for key, meta in EXPORT_META.items():
+        if level < ROLE_LEVEL.get(meta["min_role"], 99):
+            continue
+        types.append({
+            "type": key,
+            "label": meta["label"],
+            "min_role": meta["min_role"],
+            "count": export_count(key),
+        })
+    return jsonify({"status": "ok", "types": types})
+
+
+@app.route("/api/export/<data_type>", methods=["GET"])
+@require_role("operator")
+def api_export_csv(data_type):
+    """导出 CSV。query: start_date/end_date (YYYY-MM-DD), limit"""
+    meta = EXPORT_META.get(data_type)
+    if not meta or data_type not in EXPORT_TABLES:
+        return jsonify({"status": "error", "message": "不支持的数据类型"}), 400
+
+    session = _current_session()
+    if ROLE_LEVEL.get(session["role"], 0) < ROLE_LEVEL.get(meta["min_role"], 99):
+        return jsonify({
+            "status": "error",
+            "message": "权限不足，导出%s需要%s角色" % (meta["label"], ROLE_LABELS.get(meta["min_role"])),
+        }), 403
+
+    start_date = request.args.get("start_date") or None
+    end_date = request.args.get("end_date") or None
+    try:
+        limit = min(int(request.args.get("limit", 10000)), 50000)
+    except (TypeError, ValueError):
+        limit = 10000
+
+    columns, rows = export_rows(data_type, start_date=start_date, end_date=end_date, limit=limit)
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(columns)
+    writer.writerows(rows)
+    # utf-8-sig：带 BOM，保证 Excel 打开中文不乱码
+    csv_data = "\ufeff" + buf.getvalue()
+
+    filename = "%s_%s.csv" % (data_type, time.strftime("%Y%m%d_%H%M%S"))
+    _audit("export", target=data_type,
+           detail="导出 %s %d 条（%s ~ %s）" % (meta["label"], len(rows), start_date or "最早", end_date or "最新"))
+
+    return Response(
+        csv_data.encode("utf-8"),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=%s" % filename},
+    )
 
 
 # ---------------------------------------------------------------------------
