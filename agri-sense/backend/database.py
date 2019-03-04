@@ -225,6 +225,14 @@ def init_db():
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # 系统设置表：灌溉阈值、告警冷却、站点参数等持久化配置
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         conn.commit()
 
 
@@ -1345,3 +1353,32 @@ def export_count(data_type):
     table, _ = EXPORT_TABLES[data_type]
     with _get_conn() as conn:
         return conn.execute("SELECT COUNT(*) AS c FROM %s" % table).fetchone()["c"]
+
+
+# ---------------------------------------------------------------------------
+# 系统设置（key-value 持久化）
+# ---------------------------------------------------------------------------
+
+def get_setting(key, default=None):
+    """读取单个设置项，不存在返回 default。"""
+    with _get_conn() as conn:
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def set_setting(key, value):
+    """写入/更新设置项。"""
+    with _get_conn() as conn:
+        conn.execute(
+            "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP",
+            (key, str(value))
+        )
+        conn.commit()
+
+
+def get_all_settings():
+    """返回全部设置 dict {key: value}。"""
+    with _get_conn() as conn:
+        rows = conn.execute("SELECT key, value FROM settings").fetchall()
+    return {r["key"]: r["value"] for r in rows}

@@ -46,6 +46,7 @@ from database import (
     insert_login_log, get_login_logs, update_user_password, delete_other_sessions,
     insert_audit_log, get_audit_logs, get_audit_stats,
     export_rows, export_count, EXPORT_TABLES,
+    get_setting, set_setting, get_all_settings,
     get_environment_daily, get_irrigation_stats, get_alert_stats,
     get_farm_activity_stats, get_batch_stats,
 )
@@ -55,7 +56,44 @@ from weather_service import get_weather, rain_summary
 app = Flask(__name__)
 CORS(app)
 
-# 灌溉阈值（内存中，可由前端 API 修改）
+# ---------------------------------------------------------------------------
+# 系统设置：持久化到 settings 表，启动时加载（含默认值回填）
+# ---------------------------------------------------------------------------
+SETTING_DEFS = {
+    "threshold_low":    {"label": "灌溉下限阈值(%)", "type": "float", "min": 0, "max": 100},
+    "threshold_high":   {"label": "灌溉上限阈值(%)", "type": "float", "min": 0, "max": 100},
+    "alert_cooldown":   {"label": "告警冷却时间(秒)", "type": "int",   "min": 60, "max": 86400},
+    "site_name":        {"label": "站点名称",        "type": "str",   "max_len": 50},
+    "refresh_interval": {"label": "前端轮询间隔(秒)", "type": "int",   "min": 2, "max": 300},
+}
+SETTING_DEFAULTS = {
+    "threshold_low": DEFAULT_THRESHOLD_LOW,
+    "threshold_high": DEFAULT_THRESHOLD_HIGH,
+    "alert_cooldown": 600,
+    "site_name": "AgriSense 智慧农业监测系统",
+    "refresh_interval": 10,
+}
+
+
+def load_settings():
+    """启动时从 settings 表加载配置；缺失项写入默认值并返回完整 dict。"""
+    saved = get_all_settings()
+    result = {}
+    for key, default in SETTING_DEFAULTS.items():
+        if key not in saved:
+            set_setting(key, default)
+            result[key] = default
+        else:
+            try:
+                result[key] = float(saved[key]) if SETTING_DEFS[key]["type"] == "float" \
+                    else int(saved[key]) if SETTING_DEFS[key]["type"] == "int" else saved[key]
+            except (TypeError, ValueError):
+                result[key] = default
+    return result
+
+
+# 灌溉阈值（持久化到 settings 表，启动时加载；可由前端 API 修改）
+runtime_settings = None  # 启动时由 load_settings() 填充
 current_thresholds = {
     "low": DEFAULT_THRESHOLD_LOW,
     "high": DEFAULT_THRESHOLD_HIGH,
@@ -116,7 +154,7 @@ def _build_decision(latest):
 # ---------------------------------------------------------------------------
 # 规则引擎：按告警规则评估最新读数，触发时自动生成告警
 # ---------------------------------------------------------------------------
-ALERT_COOLDOWN = 600  # 同一指标+设备的告警冷却时间(秒)，避免刷屏
+ALERT_COOLDOWN = 600  # 默认冷却时间(秒)；实际值取 settings 表 alert_cooldown
 _recent_alerts = {}   # {(metric, device_id): last_alert_ts}
 
 
@@ -150,10 +188,16 @@ def evaluate_rules():
         if not _check_condition(value, rule.get("condition"), rule.get("threshold")):
             continue
 
-        # 冷却检查
+        # 冷却检查（冷却时间取系统设置 alert_cooldown）
+        cooldown = ALERT_COOLDOWN
+        if runtime_settings:
+            try:
+                cooldown = int(runtime_settings.get("alert_cooldown", ALERT_COOLDOWN))
+            except (TypeError, ValueError):
+                pass
         key = (metric, device_id)
         last_ts = _recent_alerts.get(key, 0)
-        if now - last_ts < ALERT_COOLDOWN:
+        if now - last_ts < cooldown:
             continue
 
         cond_text = "低于" if rule["condition"] in ("lt", "<") else "高于"
@@ -624,8 +668,77 @@ def api_thresholds():
 
     current_thresholds["low"] = low
     current_thresholds["high"] = high
+    # 持久化到系统设置，重启后仍生效
+    set_setting("threshold_low", low)
+    set_setting("threshold_high", high)
+    if runtime_settings is not None:
+        runtime_settings["threshold_low"] = low
+        runtime_settings["threshold_high"] = high
     _audit("thresholds_update", target="irrigation", detail="阈值 %s ~ %s" % (low, high))
     return jsonify({"status": "ok", "low": low, "high": high})
+
+
+# ---------------------------------------------------------------------------
+# 系统设置 API（仅管理员）
+# ---------------------------------------------------------------------------
+@app.route("/api/settings", methods=["GET"])
+@require_role("admin")
+def api_settings_get():
+    """返回全部系统设置项及元数据。"""
+    saved = get_all_settings()
+    items = []
+    for key, meta in SETTING_DEFS.items():
+        value = saved.get(key, SETTING_DEFAULTS.get(key))
+        items.append({"key": key, "value": value, "label": meta["label"], "type": meta["type"]})
+    return jsonify({"status": "ok", "settings": items})
+
+
+@app.route("/api/settings", methods=["PUT"])
+@require_role("admin")
+def api_settings_put():
+    """批量更新系统设置。body: {"settings": {"key": value, ...}}"""
+    data = request.get_json(silent=True) or {}
+    updates = data.get("settings") or {}
+    if not isinstance(updates, dict) or not updates:
+        return jsonify({"status": "error", "message": "没有需要更新的设置"}), 400
+
+    applied = {}
+    for key, value in updates.items():
+        meta = SETTING_DEFS.get(key)
+        if not meta:
+            return jsonify({"status": "error", "message": "未知设置项：%s" % key}), 400
+        try:
+            if meta["type"] == "float":
+                value = float(value)
+            elif meta["type"] == "int":
+                value = int(float(value))
+            else:
+                value = str(value).strip()
+                if not value or len(value) > meta.get("max_len", 200):
+                    raise ValueError("长度不合法")
+        except (TypeError, ValueError):
+            return jsonify({"status": "error", "message": "%s 取值不合法" % meta["label"]}), 400
+        if meta["type"] in ("float", "int"):
+            if value < meta.get("min", -1e18) or value > meta.get("max", 1e18):
+                return jsonify({"status": "error", "message": "%s 超出允许范围" % meta["label"]}), 400
+        applied[key] = value
+
+    # 阈值特殊校验：下限必须小于上限
+    low = applied.get("threshold_low", current_thresholds["low"])
+    high = applied.get("threshold_high", current_thresholds["high"])
+    if float(low) >= float(high):
+        return jsonify({"status": "error", "message": "灌溉下限必须小于上限"}), 400
+
+    for key, value in applied.items():
+        set_setting(key, value)
+    if runtime_settings is not None:
+        runtime_settings.update(applied)
+    current_thresholds["low"] = float(low)
+    current_thresholds["high"] = float(high)
+
+    detail = "、".join("%s=%s" % (SETTING_DEFS[k]["label"], v) for k, v in applied.items())
+    _audit("settings_update", target="settings", detail=detail)
+    return jsonify({"status": "ok", "settings": applied})
 
 
 # ---------------------------------------------------------------------------
@@ -1294,6 +1407,12 @@ def api_cms_site_delete(key):
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     init_db()
+
+    # 加载持久化系统设置（缺失项自动写入默认值），并同步灌溉阈值
+    runtime_settings = load_settings()
+    current_thresholds["low"] = float(runtime_settings["threshold_low"])
+    current_thresholds["high"] = float(runtime_settings["threshold_high"])
+    print("Settings loaded:", runtime_settings)
 
     # MQTT 连接必须在 app.run() 之前，且 use_reloader=False 避免线程重复启动
     # 使用 CallbackAPIVersion.VERSION1 兼容 paho-mqtt 2.x
