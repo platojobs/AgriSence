@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { key: "knowledge", label: "农业知识库", icon: "bi-book", href: "knowledge.html" },
   { key: "news", label: "农业新闻", icon: "bi-newspaper", href: "news.html" },
   { section: "系统" },
+  { key: "notifications", label: "通知中心", icon: "bi-bell-fill", href: "notifications.html" },
   { key: "profile", label: "个人中心", icon: "bi-person-circle", href: "profile.html" },
   { key: "users", label: "用户管理", icon: "bi-people", href: "users.html" },
   { key: "audit", label: "审计日志", icon: "bi-journal-check", href: "audit.html" },
@@ -57,13 +58,24 @@ function buildSidebar(activeKey) {
   });
 
   html += '</nav>';
-  html += '<div class="sidebar-footer">v3.1.0 &copy; 2010 AgriSense<br><a href="mobile.html" target="_blank" class="text-light"><i class="bi bi-phone"></i> 移动端</a></div>';
+  html += '<div class="sidebar-footer">v3.2.0 &copy; 2010 AgriSense<br><a href="mobile.html" target="_blank" class="text-light"><i class="bi bi-phone"></i> 移动端</a></div>';
   html += '</aside>';
   return html;
 }
 
 function buildTopbar(title, icon) {
   const user = typeof getCurrentUser === "function" ? getCurrentUser() : null;
+  const bellHtml = user
+    ? '<div class="topbar-bell" id="topbar-bell">' +
+      '<a href="javascript:;" id="bell-btn" title="通知"><i class="bi bi-bell"></i>' +
+      '<span class="bell-badge d-none" id="bell-badge">0</span></a>' +
+      '<div class="bell-dropdown d-none" id="bell-dropdown">' +
+      '<div class="bell-head"><span>通知</span>' +
+      '<a href="javascript:;" id="bell-read-all">全部已读</a></div>' +
+      '<div class="bell-list" id="bell-list"><div class="bell-empty">加载中...</div></div>' +
+      '<a class="bell-more" href="notifications.html">查看全部通知</a>' +
+      '</div></div>'
+    : "";
   const userHtml = user
     ? '<div class="topbar-user"><i class="bi bi-person-circle"></i>' +
       '<span class="u-name">' + (user.display_name || user.username) + "</span>" +
@@ -87,10 +99,66 @@ function buildTopbar(title, icon) {
           <span id="connection-status" class="status-dot offline me-2"></span>
           <small>系统运行中</small>
         </div>
+        ${bellHtml}
         ${userHtml}
       </div>
     </header>
   `;
+}
+
+// ---- 顶栏通知铃铛：30s 轮询未读数，点击展开最近 5 条 ----
+function escapeHtmlSafe(s) {
+  return String(s === null || s === undefined ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function initNotificationBell() {
+  if (typeof getAuthToken !== "function" || !getAuthToken()) return;
+  const $btn = $("#bell-btn");
+  if (!$btn.length) return;
+
+  function render(items, unread) {
+    const $badge = $("#bell-badge");
+    if (unread > 0) {
+      $badge.text(unread > 99 ? "99+" : unread).removeClass("d-none");
+    } else {
+      $badge.addClass("d-none");
+    }
+    if (!items.length) {
+      $("#bell-list").html('<div class="bell-empty">暂无通知</div>');
+      return;
+    }
+    $("#bell-list").html(items.map(function (n) {
+      const cls = n.is_read ? "" : " unread";
+      const icon = n.type === "alert" ? "bi-exclamation-triangle text-warning" : "bi-info-circle text-primary";
+      return '<a href="notifications.html" class="bell-item' + cls + '">' +
+        '<i class="bi ' + icon + '"></i>' +
+        '<div class="bell-body"><div class="bell-title">' + escapeHtmlSafe(n.title) + '</div>' +
+        '<div class="bell-content">' + escapeHtmlSafe(n.content) + '</div>' +
+        '<div class="bell-time">' + escapeHtmlSafe(n.created_at || "") + '</div></div></a>';
+    }).join(""));
+  }
+
+  function poll() {
+    $.getJSON(API_BASE + "/api/notifications?limit=5")
+      .done(function (res) { render(res.notifications || [], res.unread || 0); });
+  }
+
+  $btn.on("click", function (e) {
+    e.stopPropagation();
+    $("#bell-dropdown").toggleClass("d-none");
+    poll();
+  });
+  $(document).on("click", function (e) {
+    if (!$(e.target).closest("#topbar-bell").length) $("#bell-dropdown").addClass("d-none");
+  });
+  $("#bell-read-all").on("click", function (e) {
+    e.stopPropagation();
+    $.post(API_BASE + "/api/notifications/read_all").always(poll);
+  });
+
+  poll();
+  setInterval(poll, 30000);
 }
 
 function buildFooter() {
@@ -160,6 +228,9 @@ function initLayout() {
       $("#nav-alert-count").hide();
     }
   });
+
+  // 顶栏通知铃铛（登录后启用）
+  initNotificationBell();
 }
 
 // 立即执行布局注入（本脚本位于 body 末尾，#app-root 已解析完成）。

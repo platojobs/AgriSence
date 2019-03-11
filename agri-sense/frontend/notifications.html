@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>通知中心 - AgriSense</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet" />
+  <link href="css/style.css" rel="stylesheet" />
+  <link href="css/layout.css" rel="stylesheet" />
+  <style>
+    .n-item { display: flex; gap: 14px; padding: 14px 16px; border-bottom: 1px solid #eef2ef; align-items: flex-start; }
+    .n-item:last-child { border-bottom: none; }
+    .n-item.unread { background: #f0f7f1; }
+    .n-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center;
+      justify-content: center; font-size: 17px; flex-shrink: 0; }
+    .n-icon.alert { background: #fff8e1; color: #f9a825; }
+    .n-icon.info { background: #e3f2fd; color: #1565c0; }
+    .n-title { font-size: 14px; }
+    .n-item.unread .n-title { font-weight: 700; }
+    .n-content { font-size: 13px; color: #6b7280; margin-top: 2px; }
+    .n-time { font-size: 12px; color: #a5aea8; margin-top: 4px; }
+    .n-actions { flex-shrink: 0; }
+    .unread-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #e53935; margin-right: 6px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+  <div id="app-root">
+
+    <!-- 未登录提示 -->
+    <div id="perm-box" class="perm-panel d-none" style="max-width:480px;margin:80px auto;text-align:center">
+      <i class="bi bi-bell-slash" style="font-size:52px;color:#c5cec8"></i>
+      <h4 class="mt-3">请先登录</h4>
+      <p class="text-muted">通知中心需要登录后使用。</p>
+      <a class="btn btn-success px-4" href="login.html?redirect=notifications.html">
+        <i class="bi bi-box-arrow-in-right"></i> 去登录
+      </a>
+    </div>
+
+    <div id="notif-box" class="d-none">
+      <!-- 工具条 -->
+      <div class="sensor-card mb-3">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <span class="badge bg-danger" id="unread-badge">0 条未读</span>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary active" data-filter="all">全部</button>
+            <button class="btn btn-outline-secondary" data-filter="unread">仅未读</button>
+          </div>
+          <button class="btn btn-success btn-sm ms-auto" id="btn-read-all"><i class="bi bi-check2-all"></i> 全部已读</button>
+        </div>
+      </div>
+
+      <!-- 通知列表 -->
+      <div class="sensor-card">
+        <div id="notif-list">
+          <div class="text-center text-muted py-5">加载中...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>window.PAGE_CONFIG = { key: "notifications", title: "通知中心", icon: "bi-bell-fill" };</script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/dashboard.js?v=4"></script>
+  <script src="js/notifications.js?v=1"></script>
+  <script src="js/layout.js?v=8"></script>
+</body>
+</html>

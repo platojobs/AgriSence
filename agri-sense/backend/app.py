@@ -47,6 +47,8 @@ from database import (
     insert_audit_log, get_audit_logs, get_audit_stats,
     export_rows, export_count, EXPORT_TABLES,
     get_setting, set_setting, get_all_settings,
+    insert_notification, notify_roles, get_notifications,
+    mark_notification_read, mark_all_notifications_read,
     get_environment_daily, get_irrigation_stats, get_alert_stats,
     get_farm_activity_stats, get_batch_stats,
 )
@@ -204,6 +206,11 @@ def evaluate_rules():
         message = f"{metric} {cond_text} 阈值 {rule['threshold']}（当前值 {value}）"
         insert_alert(metric, rule.get("level", "warning"), message, device_id)
         _recent_alerts[key] = now
+        # 同步生成站内通知，广播给管理员与操作员
+        try:
+            notify_roles(["admin", "operator"], "告警提醒", message, "alert")
+        except Exception as e:
+            print("notify error:", e)
         print(f"[RULE] alert generated: {message}")
 
 
@@ -739,6 +746,43 @@ def api_settings_put():
     detail = "、".join("%s=%s" % (SETTING_DEFS[k]["label"], v) for k, v in applied.items())
     _audit("settings_update", target="settings", detail=detail)
     return jsonify({"status": "ok", "settings": applied})
+
+
+# ---------------------------------------------------------------------------
+# 站内通知 API（登录用户均可访问自己的通知）
+# ---------------------------------------------------------------------------
+@app.route("/api/notifications", methods=["GET"])
+@require_role("viewer")
+def api_notifications():
+    """我的通知列表 + 未读数。query: limit, unread=1"""
+    session = _current_session()
+    try:
+        limit = min(int(request.args.get("limit", 20)), 200)
+    except (TypeError, ValueError):
+        limit = 20
+    unread_only = request.args.get("unread") == "1"
+    items, unread = get_notifications(session["username"], limit=limit, unread_only=unread_only)
+    return jsonify({"status": "ok", "notifications": items, "unread": unread})
+
+
+@app.route("/api/notifications/<int:nid>/read", methods=["POST"])
+@require_role("viewer")
+def api_notification_read(nid):
+    """标记一条通知已读（仅本人）。"""
+    session = _current_session()
+    ok = mark_notification_read(nid, session["username"])
+    if not ok:
+        return jsonify({"status": "error", "message": "通知不存在"}), 404
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/notifications/read_all", methods=["POST"])
+@require_role("viewer")
+def api_notifications_read_all():
+    """我的通知全部标记已读。"""
+    session = _current_session()
+    n = mark_all_notifications_read(session["username"])
+    return jsonify({"status": "ok", "marked": n})
 
 
 # ---------------------------------------------------------------------------

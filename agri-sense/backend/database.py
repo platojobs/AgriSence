@@ -233,6 +233,18 @@ def init_db():
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # 站内通知表：按用户投递（告警广播到 admin/operator，个人事件仅本人）
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                title TEXT,
+                content TEXT,
+                type TEXT DEFAULT 'info',
+                is_read INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         conn.commit()
 
 
@@ -1382,3 +1394,73 @@ def get_all_settings():
     with _get_conn() as conn:
         rows = conn.execute("SELECT key, value FROM settings").fetchall()
     return {r["key"]: r["value"] for r in rows}
+
+
+# ---------------------------------------------------------------------------
+# 站内通知
+# ---------------------------------------------------------------------------
+
+def insert_notification(username, title, content, ntype="info"):
+    """给单个用户投递一条通知。"""
+    with _get_conn() as conn:
+        conn.execute(
+            "INSERT INTO notifications (username, title, content, type) VALUES (?, ?, ?, ?)",
+            (username, title, content, ntype)
+        )
+        conn.commit()
+
+
+def notify_roles(roles, title, content, ntype="info"):
+    """给指定角色的全部启用用户投递通知（如告警广播给 admin/operator）。"""
+    with _get_conn() as conn:
+        users = conn.execute(
+            "SELECT username FROM users WHERE status = 'active' AND role IN (%s)"
+            % ",".join("?" * len(roles)),
+            roles
+        ).fetchall()
+        for u in users:
+            conn.execute(
+                "INSERT INTO notifications (username, title, content, type) VALUES (?, ?, ?, ?)",
+                (u["username"], title, content, ntype)
+            )
+        conn.commit()
+    return len(users)
+
+
+def get_notifications(username, limit=20, unread_only=False):
+    """某用户的通知列表（id 倒序）+ 未读数。"""
+    sql = "SELECT * FROM notifications WHERE username = ?"
+    params = [username]
+    if unread_only:
+        sql += " AND is_read = 0"
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(min(limit, 200))
+    with _get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+        unread = conn.execute(
+            "SELECT COUNT(*) AS c FROM notifications WHERE username = ? AND is_read = 0",
+            (username,)
+        ).fetchone()["c"]
+    return [dict(r) for r in rows], unread
+
+
+def mark_notification_read(nid, username):
+    """标记本人一条通知为已读。"""
+    with _get_conn() as conn:
+        cur = conn.execute(
+            "UPDATE notifications SET is_read = 1 WHERE id = ? AND username = ?",
+            (nid, username)
+        )
+        conn.commit()
+    return cur.rowcount > 0
+
+
+def mark_all_notifications_read(username):
+    """本人通知全部已读，返回更新条数。"""
+    with _get_conn() as conn:
+        cur = conn.execute(
+            "UPDATE notifications SET is_read = 1 WHERE username = ? AND is_read = 0",
+            (username,)
+        )
+        conn.commit()
+    return cur.rowcount
