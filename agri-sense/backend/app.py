@@ -28,7 +28,7 @@ from database import (
     init_db, insert_reading, get_latest, get_history, get_recent_readings,
     insert_irrigation_log, get_recent_logs,
     get_devices, get_device, upsert_device, delete_device,
-    get_alerts, insert_alert, handle_alert,
+    get_alerts, get_alert, insert_alert, handle_alert,
     get_alert_rules, upsert_alert_rule, delete_alert_rule,
     get_schedules, insert_schedule, update_schedule, delete_schedule,
     get_overview_stats,
@@ -49,6 +49,8 @@ from database import (
     get_setting, set_setting, get_all_settings,
     insert_notification, notify_roles, get_notifications,
     mark_notification_read, mark_all_notifications_read,
+    insert_ticket, get_tickets, get_ticket, update_ticket, delete_ticket,
+    get_ticket_stats,
     get_environment_daily, get_irrigation_stats, get_alert_stats,
     get_farm_activity_stats, get_batch_stats,
 )
@@ -783,6 +785,206 @@ def api_notifications_read_all():
     session = _current_session()
     n = mark_all_notifications_read(session["username"])
     return jsonify({"status": "ok", "marked": n})
+
+
+# ---------------------------------------------------------------------------
+# 工单系统 API
+# 状态流转：open(待处理) -> processing(处理中) -> resolved(已解决) / closed(已关闭)
+# ---------------------------------------------------------------------------
+TICKET_TYPES = {"alert": "告警工单", "ops": "运维工单", "inspect": "巡检工单"}
+TICKET_PRIORITIES = {"low": "低", "medium": "中", "high": "高", "urgent": "紧急"}
+TICKET_STATUS = {"open": "待处理", "processing": "处理中", "resolved": "已解决", "closed": "已关闭"}
+
+
+def _notify_assignee(assignee, ticket, action_text):
+    """工单指派/变更时通知被指派人。"""
+    if not assignee:
+        return
+    try:
+        insert_notification(
+            assignee,
+            "工单%s" % action_text,
+            "工单 %s「%s」%s" % (ticket["ticket_no"], ticket["title"], action_text),
+            "ticket",
+        )
+    except Exception as e:
+        print("notify error:", e)
+
+
+@app.route("/api/tickets", methods=["GET"])
+@require_role("viewer")
+def api_tickets_list():
+    """工单列表。query: status / assignee / keyword / mine=1(我创建的) / todo=1(指派给我的)"""
+    session = _current_session()
+    kwargs = {
+        "status": request.args.get("status"),
+        "keyword": request.args.get("keyword"),
+    }
+    if request.args.get("mine") == "1":
+        kwargs["creator"] = session["username"]
+    if request.args.get("todo") == "1":
+        kwargs["assignee"] = session["username"]
+    elif request.args.get("assignee"):
+        kwargs["assignee"] = request.args.get("assignee")
+    return jsonify({"status": "ok", "tickets": get_tickets(**kwargs)})
+
+
+@app.route("/api/tickets/stats", methods=["GET"])
+@require_role("viewer")
+def api_tickets_stats():
+    """工单统计（状态/优先级/未指派数）。"""
+    return jsonify({"status": "ok", "stats": get_ticket_stats()})
+
+
+@app.route("/api/tickets/assignable", methods=["GET"])
+@require_role("operator")
+def api_tickets_assignable():
+    """可指派用户列表（operator 与 admin），用于工单指派下拉。"""
+    users = [
+        {"username": u["username"], "display_name": u.get("display_name") or u["username"],
+         "role": u["role"], "role_label": ROLE_LABELS.get(u["role"], u["role"])}
+        for u in get_users()
+        if u["role"] in ("operator", "admin") and u.get("status") == "active"
+    ]
+    return jsonify({"status": "ok", "users": users})
+
+
+@app.route("/api/tickets/<int:ticket_id>", methods=["GET"])
+@require_role("viewer")
+def api_ticket_detail(ticket_id):
+    """工单详情。"""
+    ticket = get_ticket(ticket_id)
+    if not ticket:
+        return jsonify({"status": "error", "message": "工单不存在"}), 404
+    return jsonify({"status": "ok", "ticket": ticket})
+
+
+@app.route("/api/tickets", methods=["POST"])
+@require_role("operator")
+def api_ticket_create():
+    """创建工单。body: {title, description, type, priority, assignee}"""
+    data = request.get_json(silent=True) or request.form
+    title = (data.get("title") or "").strip()
+    if not title:
+        return jsonify({"status": "error", "message": "工单标题不能为空"}), 400
+    ttype = data.get("type", "ops")
+    priority = data.get("priority", "medium")
+    if ttype not in TICKET_TYPES or priority not in TICKET_PRIORITIES:
+        return jsonify({"status": "error", "message": "工单类型或优先级不合法"}), 400
+    session = _current_session()
+    assignee = (data.get("assignee") or "").strip() or None
+    if assignee and not get_user_by_username(assignee):
+        return jsonify({"status": "error", "message": "指派人不存在"}), 400
+    ticket = insert_ticket(title, data.get("description", ""), session["username"],
+                           ttype=ttype, priority=priority, assignee=assignee)
+    _audit("ticket_create", target=ticket["ticket_no"], detail="创建工单「%s」" % title)
+    if assignee:
+        _notify_assignee(assignee, ticket, "指派给您")
+    return jsonify({"status": "ok", "ticket": ticket})
+
+
+@app.route("/api/tickets/<int:ticket_id>", methods=["PUT"])
+@require_role("operator")
+def api_ticket_update(ticket_id):
+    """更新工单：编辑字段 / 指派 / 状态流转 / 填写处理结果。"""
+    ticket = get_ticket(ticket_id)
+    if not ticket:
+        return jsonify({"status": "error", "message": "工单不存在"}), 404
+    data = request.get_json(silent=True) or request.form
+    fields = {}
+    if "title" in data:
+        title = (data.get("title") or "").strip()
+        if not title:
+            return jsonify({"status": "error", "message": "工单标题不能为空"}), 400
+        fields["title"] = title
+    if "description" in data:
+        fields["description"] = data.get("description") or ""
+    if "type" in data:
+        if data["type"] not in TICKET_TYPES:
+            return jsonify({"status": "error", "message": "工单类型不合法"}), 400
+        fields["type"] = data["type"]
+    if "priority" in data:
+        if data["priority"] not in TICKET_PRIORITIES:
+            return jsonify({"status": "error", "message": "优先级不合法"}), 400
+        fields["priority"] = data["priority"]
+    if "status" in data:
+        if data["status"] not in TICKET_STATUS:
+            return jsonify({"status": "error", "message": "状态不合法"}), 400
+        fields["status"] = data["status"]
+    if "resolution" in data:
+        fields["resolution"] = data.get("resolution") or ""
+    if "assignee" in data:
+        assignee = (data.get("assignee") or "").strip() or None
+        if assignee and not get_user_by_username(assignee):
+            return jsonify({"status": "error", "message": "指派人不存在"}), 400
+        fields["assignee"] = assignee
+
+    updated = update_ticket(ticket_id, fields)
+    session = _current_session()
+    _audit("ticket_update", target=updated["ticket_no"],
+           detail="更新工单：%s" % ", ".join(sorted(fields.keys())) or "无变更")
+    # 指派变更时通知新指派人
+    if "assignee" in fields and fields["assignee"] and fields["assignee"] != ticket.get("assignee"):
+        _notify_assignee(fields["assignee"], updated, "指派给您")
+    # 状态流转通知创建人
+    if "status" in fields and fields["status"] != ticket.get("status") and ticket.get("creator"):
+        try:
+            insert_notification(
+                ticket["creator"], "工单状态更新",
+                "工单 %s「%s」状态变更为「%s」" % (
+                    updated["ticket_no"], updated["title"],
+                    TICKET_STATUS.get(fields["status"], fields["status"])),
+                "ticket",
+            )
+        except Exception as e:
+            print("notify error:", e)
+    return jsonify({"status": "ok", "ticket": updated})
+
+
+@app.route("/api/tickets/<int:ticket_id>", methods=["DELETE"])
+@require_role("admin")
+def api_ticket_delete(ticket_id):
+    """删除工单（仅管理员）。"""
+    ticket = get_ticket(ticket_id)
+    if not ticket:
+        return jsonify({"status": "error", "message": "工单不存在"}), 404
+    delete_ticket(ticket_id)
+    _audit("ticket_delete", target=ticket["ticket_no"], detail="删除工单「%s」" % ticket["title"])
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/alerts/<int:alert_id>/to_ticket", methods=["POST"])
+@require_role("operator")
+def api_alert_to_ticket(alert_id):
+    """由告警一键生成工单。body 可选: {priority, assignee}"""
+    alert = get_alert(alert_id)
+    if not alert:
+        return jsonify({"status": "error", "message": "告警不存在"}), 404
+    # 同一告警不重复建单
+    existing = [t for t in get_tickets(limit=500) if t.get("alert_id") == alert_id]
+    if existing:
+        return jsonify({"status": "error", "message": "该告警已生成工单 %s" % existing[0]["ticket_no"],
+                        "ticket": existing[0]}), 409
+    data = request.get_json(silent=True) or {}
+    level_priority = {"critical": "urgent", "warning": "high", "info": "medium"}
+    priority = data.get("priority") or level_priority.get(alert.get("level"), "medium")
+    if priority not in TICKET_PRIORITIES:
+        priority = "medium"
+    assignee = (data.get("assignee") or "").strip() or None
+    if assignee and not get_user_by_username(assignee):
+        return jsonify({"status": "error", "message": "指派人不存在"}), 400
+    session = _current_session()
+    ticket = insert_ticket(
+        "告警处理：%s" % alert["message"][:50],
+        "来源告警 #%s（设备 %s，级别 %s）：\n%s" % (
+            alert["id"], alert.get("device_id") or "-", alert.get("level") or "-", alert["message"]),
+        session["username"], ttype="alert", priority=priority,
+        alert_id=alert_id, assignee=assignee)
+    _audit("ticket_from_alert", target=ticket["ticket_no"],
+           detail="由告警 #%d 生成工单" % alert_id)
+    if assignee:
+        _notify_assignee(assignee, ticket, "指派给您")
+    return jsonify({"status": "ok", "ticket": ticket})
 
 
 # ---------------------------------------------------------------------------

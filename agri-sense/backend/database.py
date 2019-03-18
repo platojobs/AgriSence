@@ -245,6 +245,25 @@ def init_db():
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # 工单表：告警/日常运维工单，支持指派、流转与处理记录
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket_no TEXT UNIQUE,
+                title TEXT NOT NULL,
+                description TEXT,
+                type TEXT DEFAULT 'ops',
+                priority TEXT DEFAULT 'medium',
+                status TEXT DEFAULT 'open',
+                alert_id INTEGER,
+                creator TEXT,
+                assignee TEXT,
+                resolution TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT,
+                closed_at TEXT
+            )
+        """)
         conn.commit()
 
 
@@ -401,6 +420,13 @@ def get_alerts(status=None, limit=100):
                 "SELECT * FROM alerts ORDER BY id DESC LIMIT ?", (limit,)
             ).fetchall()
     return [dict(row) for row in rows]
+
+
+def get_alert(alert_id):
+    """按 id 取单条告警，无则 None。"""
+    with _get_conn() as conn:
+        row = conn.execute("SELECT * FROM alerts WHERE id = ?", (alert_id,)).fetchone()
+    return dict(row) if row else None
 
 
 def insert_alert(type_, level, message, device_id):
@@ -1464,3 +1490,112 @@ def mark_all_notifications_read(username):
         )
         conn.commit()
     return cur.rowcount
+
+
+# ---------------------------------------------------------------------------
+# 工单系统
+# ---------------------------------------------------------------------------
+def _next_ticket_no(conn):
+    """生成工单号 TK-XXXX（按最大 id 递增）。"""
+    row = conn.execute("SELECT MAX(id) AS m FROM tickets").fetchone()
+    return "TK-%04d" % ((row["m"] or 0) + 1)
+
+
+def insert_ticket(title, description, creator, ttype="ops", priority="medium",
+                  alert_id=None, assignee=None):
+    """创建工单，返回新工单 dict。"""
+    with _get_conn() as conn:
+        ticket_no = _next_ticket_no(conn)
+        cur = conn.execute(
+            "INSERT INTO tickets (ticket_no, title, description, type, priority, "
+            "status, alert_id, creator, assignee, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, CURRENT_TIMESTAMP)",
+            (ticket_no, title, description, ttype, priority, alert_id, creator, assignee)
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM tickets WHERE id = ?", (cur.lastrowid,)).fetchone()
+    return dict(row)
+
+
+def get_tickets(status=None, assignee=None, creator=None, keyword=None, limit=200):
+    """工单列表（id 倒序），支持状态/指派人/创建人/关键词过滤。"""
+    sql = "SELECT * FROM tickets WHERE 1=1"
+    params = []
+    if status:
+        sql += " AND status = ?"
+        params.append(status)
+    if assignee:
+        sql += " AND assignee = ?"
+        params.append(assignee)
+    if creator:
+        sql += " AND creator = ?"
+        params.append(creator)
+    if keyword:
+        sql += " AND (title LIKE ? OR description LIKE ? OR ticket_no LIKE ?)"
+        like = "%" + keyword + "%"
+        params += [like, like, like]
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(min(limit, 500))
+    with _get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_ticket(ticket_id):
+    """按 id 取单个工单，无则 None。"""
+    with _get_conn() as conn:
+        row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def update_ticket(ticket_id, fields):
+    """更新工单字段（白名单），返回更新后的工单 dict 或 None。"""
+    allowed = ("title", "description", "type", "priority", "status",
+               "assignee", "resolution")
+    sets, params = [], []
+    for key in allowed:
+        if key in fields:
+            sets.append(key + " = ?")
+            params.append(fields[key])
+    if not sets:
+        return get_ticket(ticket_id)
+    sets.append("updated_at = CURRENT_TIMESTAMP")
+    # 状态进入已解决/已关闭时记录关闭时间
+    if fields.get("status") in ("resolved", "closed"):
+        sets.append("closed_at = CURRENT_TIMESTAMP")
+    sql = "UPDATE tickets SET " + ", ".join(sets) + " WHERE id = ?"
+    params.append(ticket_id)
+    with _get_conn() as conn:
+        conn.execute(sql, params)
+        conn.commit()
+    return get_ticket(ticket_id)
+
+
+def delete_ticket(ticket_id):
+    """删除工单，返回是否删除成功。"""
+    with _get_conn() as conn:
+        cur = conn.execute("DELETE FROM tickets WHERE id = ?", (ticket_id,))
+        conn.commit()
+    return cur.rowcount > 0
+
+
+def get_ticket_stats():
+    """工单统计：按状态与优先级汇总。"""
+    with _get_conn() as conn:
+        by_status = {r["status"]: r["c"] for r in conn.execute(
+            "SELECT status, COUNT(*) AS c FROM tickets GROUP BY status"
+        ).fetchall()}
+        by_priority = {r["priority"]: r["c"] for r in conn.execute(
+            "SELECT priority, COUNT(*) AS c FROM tickets GROUP BY priority"
+        ).fetchall()}
+        open_unassigned = conn.execute(
+            "SELECT COUNT(*) AS c FROM tickets WHERE status = 'open' "
+            "AND (assignee IS NULL OR assignee = '')"
+        ).fetchone()["c"]
+        total = conn.execute("SELECT COUNT(*) AS c FROM tickets").fetchone()["c"]
+    return {
+        "total": total,
+        "by_status": by_status,
+        "by_priority": by_priority,
+        "open_unassigned": open_unassigned,
+    }

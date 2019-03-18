@@ -43,6 +43,9 @@ function renderAlerts(alerts) {
       <td>${a.message || "--"}</td>
       <td>${statusBadge(a.status)}</td>
       <td class="text-end">
+        ${typeof getCurrentUser === "function" && ["operator", "admin"].includes((getCurrentUser() || {}).role)
+          ? `<button class="btn btn-sm btn-outline-primary btn-to-ticket" data-id="${a.id}" title="由该告警生成工单"><i class="bi bi-clipboard2-plus"></i> 转工单</button> `
+          : ""}
         ${a.status === "pending"
           ? `<button class="btn btn-sm btn-success btn-handle" data-id="${a.id}"><i class="bi bi-check2"></i> 处理</button>`
           : `<small class="text-muted">${a.handled_at || ""}</small>`}
@@ -161,6 +164,24 @@ $(document).ready(function () {
 
   $(document).on("click", ".btn-handle", function () {
     handleAlert(parseInt($(this).data("id"), 10));
+  });
+  $(document).on("click", ".btn-to-ticket", function () {
+    const id = parseInt($(this).data("id"), 10);
+    $.ajax({
+      url: API_BASE + "/api/alerts/" + id + "/to_ticket",
+      method: "POST",
+      contentType: "application/json",
+      data: "{}",
+      success: function (res) {
+        if (confirm("已生成工单 " + res.ticket.ticket_no + "，是否前往工单管理？")) {
+          location.href = "tickets.html";
+        }
+      },
+      error: function (xhr) {
+        const msg = xhr.responseJSON && xhr.responseJSON.message;
+        alert(msg || "生成工单失败");
+      },
+    });
   });
   $(document).on("click", ".btn-rule-edit", function () {
     const id = parseInt($(this).data("id"), 10);
