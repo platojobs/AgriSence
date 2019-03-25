@@ -51,6 +51,8 @@ from database import (
     mark_notification_read, mark_all_notifications_read,
     insert_ticket, get_tickets, get_ticket, update_ticket, delete_ticket,
     get_ticket_stats,
+    get_table_stats, count_expired_rows, cleanup_old_rows, vacuum_db,
+    get_db_size, insert_maintenance_log, get_maintenance_logs, CLEANABLE_TABLES,
     get_environment_daily, get_irrigation_stats, get_alert_stats,
     get_farm_activity_stats, get_batch_stats,
 )
@@ -69,6 +71,8 @@ SETTING_DEFS = {
     "alert_cooldown":   {"label": "告警冷却时间(秒)", "type": "int",   "min": 60, "max": 86400},
     "site_name":        {"label": "站点名称",        "type": "str",   "max_len": 50},
     "refresh_interval": {"label": "前端轮询间隔(秒)", "type": "int",   "min": 2, "max": 300},
+    "data_retention_days": {"label": "数据保留天数",  "type": "int",   "min": 1, "max": 3650},
+    "auto_cleanup":     {"label": "自动清理开关(1/0)", "type": "int",   "min": 0, "max": 1},
 }
 SETTING_DEFAULTS = {
     "threshold_low": DEFAULT_THRESHOLD_LOW,
@@ -76,6 +80,8 @@ SETTING_DEFAULTS = {
     "alert_cooldown": 600,
     "site_name": "AgriSense 智慧农业监测系统",
     "refresh_interval": 10,
+    "data_retention_days": 90,
+    "auto_cleanup": 1,
 }
 
 
@@ -748,6 +754,127 @@ def api_settings_put():
     detail = "、".join("%s=%s" % (SETTING_DEFS[k]["label"], v) for k, v in applied.items())
     _audit("settings_update", target="settings", detail=detail)
     return jsonify({"status": "ok", "settings": applied})
+
+
+# ---------------------------------------------------------------------------
+# 数据维护 API（仅管理员）：表统计、过期清理、VACUUM、维护日志
+# ---------------------------------------------------------------------------
+def _retention_days():
+    """当前生效的数据保留天数。"""
+    try:
+        return int(runtime_settings.get("data_retention_days", 90))
+    except (TypeError, ValueError):
+        return 90
+
+
+@app.route("/api/maintenance/overview", methods=["GET"])
+@require_role("admin")
+def api_maintenance_overview():
+    """维护总览：各时序表行数/时间范围 + 按保留策略可清理行数 + 库文件大小。"""
+    days = _retention_days()
+    tables = get_table_stats()
+    for t in tables:
+        t["removable"] = count_expired_rows(t["table"], days)
+    return jsonify({
+        "status": "ok",
+        "db_size": get_db_size(),
+        "retention_days": days,
+        "auto_cleanup": int(runtime_settings.get("auto_cleanup", 1)) if runtime_settings else 1,
+        "tables": tables,
+    })
+
+
+@app.route("/api/maintenance/preview", methods=["GET"])
+@require_role("admin")
+def api_maintenance_preview():
+    """预览清理：?table=sensor_readings&days=90 返回将删除的行数。"""
+    table = request.args.get("table", "")
+    if table not in CLEANABLE_TABLES:
+        return jsonify({"status": "error", "message": "不支持的数据表"}), 400
+    try:
+        days = int(request.args.get("days", _retention_days()))
+    except (TypeError, ValueError):
+        days = _retention_days()
+    days = max(1, min(days, 3650))
+    return jsonify({"status": "ok", "table": table, "days": days,
+                    "removable": count_expired_rows(table, days)})
+
+
+@app.route("/api/maintenance/cleanup", methods=["POST"])
+@require_role("admin")
+def api_maintenance_cleanup():
+    """手动清理。body: {table: "sensor_readings"|"all", days: 90}"""
+    data = request.get_json(silent=True) or request.form
+    table = data.get("table", "")
+    try:
+        days = int(data.get("days", _retention_days()))
+    except (TypeError, ValueError):
+        days = _retention_days()
+    days = max(1, min(days, 3650))
+    targets = list(CLEANABLE_TABLES.keys()) if table == "all" else [table]
+    if any(t not in CLEANABLE_TABLES for t in targets):
+        return jsonify({"status": "error", "message": "不支持的数据表"}), 400
+
+    session = _current_session()
+    results, total = {}, 0
+    for t in targets:
+        removed = cleanup_old_rows(t, days)
+        results[t] = removed
+        total += removed
+        insert_maintenance_log("cleanup", t, removed, days, "manual",
+                               session["username"],
+                               "清理 %s 中 %d 天前的数据" % (CLEANABLE_TABLES[t], days))
+    _audit("data_cleanup", target=table,
+           detail="清理 %d 天前数据，共删除 %d 行" % (days, total))
+    return jsonify({"status": "ok", "days": days, "removed": results, "total_removed": total})
+
+
+@app.route("/api/maintenance/vacuum", methods=["POST"])
+@require_role("admin")
+def api_maintenance_vacuum():
+    """VACUUM 压缩数据库文件。"""
+    before, after = vacuum_db()
+    saved = before - after
+    session = _current_session()
+    insert_maintenance_log("vacuum", "-", 0, None, "manual", session["username"],
+                           "VACUUM 压缩：%d → %d 字节，释放 %d 字节" % (before, after, saved))
+    _audit("data_vacuum", target="database",
+           detail="VACUUM 释放 %d 字节" % saved)
+    return jsonify({"status": "ok", "before": before, "after": after, "saved": saved})
+
+
+@app.route("/api/maintenance/logs", methods=["GET"])
+@require_role("admin")
+def api_maintenance_logs():
+    """维护日志列表。"""
+    try:
+        limit = min(int(request.args.get("limit", 50)), 200)
+    except (TypeError, ValueError):
+        limit = 50
+    return jsonify({"status": "ok", "logs": get_maintenance_logs(limit)})
+
+
+def _auto_cleanup_loop():
+    """后台线程：每天按保留策略自动清理一次（auto_cleanup 开启时）。"""
+    last_run = {"date": None}
+    while True:
+        try:
+            today = time.strftime("%Y-%m-%d")
+            enabled = runtime_settings and int(runtime_settings.get("auto_cleanup", 1)) == 1
+            if enabled and last_run["date"] != today:
+                days = _retention_days()
+                total = 0
+                for t in CLEANABLE_TABLES:
+                    removed = cleanup_old_rows(t, days)
+                    total += removed
+                    if removed:
+                        insert_maintenance_log("cleanup", t, removed, days, "auto",
+                                               "system", "每日自动清理 %d 天前数据" % days)
+                last_run["date"] = today
+                print("[MAINT] auto cleanup done, days=%d removed=%d" % (days, total))
+        except Exception as e:
+            print("auto cleanup error:", e)
+        time.sleep(3600)
 
 
 # ---------------------------------------------------------------------------
@@ -1675,5 +1802,9 @@ if __name__ == "__main__":
     # 启动规则引擎后台线程
     threading.Thread(target=_rule_engine_loop, daemon=True).start()
     print("Rule engine started (evaluates every 30s)")
+
+    # 启动数据自动清理后台线程（每日一次，按 settings 保留策略）
+    threading.Thread(target=_auto_cleanup_loop, daemon=True).start()
+    print("Auto cleanup started (daily)")
 
     app.run(host=FLASK_HOST, port=FLASK_PORT, debug=False, use_reloader=False)

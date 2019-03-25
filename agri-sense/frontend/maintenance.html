@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>数据维护 - AgriSense</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet" />
+  <link href="css/style.css" rel="stylesheet" />
+  <link href="css/layout.css" rel="stylesheet" />
+  <style>
+    .stat-card { text-align: center; padding: 18px 10px; }
+    .stat-card .num { font-size: 24px; font-weight: 700; }
+    .stat-card .lbl { font-size: 13px; color: #6b7280; margin-top: 2px; }
+    .maint-table td { vertical-align: middle; font-size: 14px; }
+    .removable { color: #c62828; font-weight: 600; }
+    .log-mode-auto { background: #e3f2fd; color: #1565c0; }
+    .log-mode-manual { background: #e8f5e9; color: #2e7d32; }
+  </style>
+</head>
+<body>
+  <div id="app-root">
+
+    <!-- 无权限提示 -->
+    <div id="perm-box" class="perm-panel d-none" style="max-width:480px;margin:80px auto;text-align:center">
+      <i class="bi bi-shield-lock" style="font-size:52px;color:#c5cec8"></i>
+      <h4 class="mt-3">需要管理员权限</h4>
+      <p class="text-muted">数据维护仅对管理员开放。</p>
+      <a class="btn btn-success px-4" href="login.html?redirect=maintenance.html">
+        <i class="bi bi-box-arrow-in-right"></i> 去登录
+      </a>
+    </div>
+
+    <div id="maint-box" class="d-none">
+      <!-- 总览卡片 -->
+      <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3">
+          <div class="sensor-card stat-card"><div class="num" id="st-dbsize">-</div><div class="lbl">数据库大小</div></div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="sensor-card stat-card"><div class="num" id="st-rows">-</div><div class="lbl">时序数据总行数</div></div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="sensor-card stat-card"><div class="num text-danger" id="st-removable">-</div><div class="lbl">可清理行数</div></div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="sensor-card stat-card"><div class="num text-success" id="st-retention">-</div><div class="lbl">当前保留策略</div></div>
+        </div>
+      </div>
+
+      <!-- 保留策略设置 -->
+      <div class="sensor-card mb-3">
+        <h6 class="mb-3"><i class="bi bi-calendar2-check"></i> 保留策略</h6>
+        <div class="d-flex flex-wrap gap-3 align-items-end">
+          <div>
+            <label class="form-label mb-1">数据保留天数</label>
+            <input type="number" class="form-control form-control-sm" id="f-retention" min="1" max="3650" style="width:130px" />
+          </div>
+          <div>
+            <label class="form-label mb-1">每日自动清理</label>
+            <select class="form-select form-select-sm" id="f-auto" style="width:130px">
+              <option value="1">开启</option>
+              <option value="0">关闭</option>
+            </select>
+          </div>
+          <button class="btn btn-success btn-sm" id="btn-save-policy"><i class="bi bi-check-lg"></i> 保存策略</button>
+          <span class="text-muted" style="font-size:12px">超过保留天数的传感器读数、告警、通知、登录与灌溉日志将被自动清理</span>
+        </div>
+      </div>
+
+      <!-- 表统计 + 手动清理 -->
+      <div class="sensor-card mb-3">
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+          <h6 class="mb-0"><i class="bi bi-table"></i> 数据表统计</h6>
+          <div class="ms-auto d-flex gap-2 align-items-center">
+            <select class="form-select form-select-sm" id="f-table" style="width:160px">
+              <option value="all">全部表</option>
+            </select>
+            <input type="number" class="form-control form-control-sm" id="f-days" min="1" max="3650" style="width:110px" placeholder="天数" />
+            <button class="btn btn-outline-secondary btn-sm" id="btn-preview"><i class="bi bi-eye"></i> 预览</button>
+            <button class="btn btn-danger btn-sm" id="btn-cleanup"><i class="bi bi-trash3"></i> 执行清理</button>
+            <button class="btn btn-outline-primary btn-sm" id="btn-vacuum"><i class="bi bi-file-zip"></i> VACUUM 压缩</button>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover maint-table mb-0">
+            <thead>
+              <tr><th>数据表</th><th>行数</th><th>最早数据</th><th>最新数据</th><th>可清理行数</th></tr>
+            </thead>
+            <tbody id="table-stats">
+              <tr><td colspan="5" class="text-center text-muted py-4">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 维护日志 -->
+      <div class="sensor-card">
+        <h6 class="mb-3"><i class="bi bi-journal-text"></i> 维护日志</h6>
+        <div class="table-responsive">
+          <table class="table table-hover maint-table mb-0">
+            <thead>
+              <tr><th>时间</th><th>操作</th><th>目标表</th><th>删除行数</th><th>保留天数</th><th>方式</th><th>操作人</th><th>详情</th></tr>
+            </thead>
+            <tbody id="log-list">
+              <tr><td colspan="8" class="text-center text-muted py-4">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>window.PAGE_CONFIG = { key: "maintenance", title: "数据维护", icon: "bi-database-gear" };</script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/dashboard.js?v=4"></script>
+  <script src="js/maintenance.js?v=1"></script>
+  <script src="js/layout.js?v=9"></script>
+</body>
+</html>

@@ -264,6 +264,20 @@ def init_db():
                 closed_at TEXT
             )
         """)
+        # 数据维护日志表：记录手动/自动清理与 VACUUM 操作
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS maintenance_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                action TEXT,
+                target_table TEXT,
+                removed_rows INTEGER DEFAULT 0,
+                retention_days INTEGER,
+                mode TEXT DEFAULT 'manual',
+                operator TEXT,
+                detail TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         conn.commit()
 
 
@@ -1599,3 +1613,98 @@ def get_ticket_stats():
         "by_priority": by_priority,
         "open_unassigned": open_unassigned,
     }
+
+
+# ---------------------------------------------------------------------------
+# 数据维护：时序表统计、过期清理、VACUUM、维护日志
+# ---------------------------------------------------------------------------
+# 允许清理的时序表（均含 created_at 文本时间列）
+CLEANABLE_TABLES = {
+    "sensor_readings": "传感器读数",
+    "alerts": "告警记录",
+    "notifications": "站内通知",
+    "login_logs": "登录日志",
+    "irrigation_logs": "灌溉日志",
+}
+
+
+def get_db_size():
+    """返回数据库文件大小（字节）。"""
+    db_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.getsize(os.path.join(db_dir, DATABASE_PATH))
+
+
+def get_table_stats():
+    """各可维护表的行数与时间范围。"""
+    stats = []
+    with _get_conn() as conn:
+        for table, label in CLEANABLE_TABLES.items():
+            row = conn.execute(
+                "SELECT COUNT(*) AS c, MIN(created_at) AS earliest, "
+                "MAX(created_at) AS latest FROM " + table
+            ).fetchone()
+            stats.append({
+                "table": table,
+                "label": label,
+                "rows": row["c"],
+                "earliest": row["earliest"],
+                "latest": row["latest"],
+            })
+    return stats
+
+
+def count_expired_rows(table, days):
+    """统计指定表中早于 days 天的行数（预览用）。"""
+    if table not in CLEANABLE_TABLES:
+        return 0
+    with _get_conn() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS c FROM " + table +
+            " WHERE created_at < datetime('now', 'localtime', ?)",
+            ("-%d days" % int(days),)
+        ).fetchone()
+    return row["c"]
+
+
+def cleanup_old_rows(table, days):
+    """删除指定表中早于 days 天的数据，返回删除行数。"""
+    if table not in CLEANABLE_TABLES:
+        return 0
+    with _get_conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM " + table +
+            " WHERE created_at < datetime('now', 'localtime', ?)",
+            ("-%d days" % int(days),)
+        )
+        conn.commit()
+    return cur.rowcount
+
+
+def vacuum_db():
+    """VACUUM 压缩数据库文件，返回压缩前后大小 (before, after)。"""
+    before = get_db_size()
+    with _get_conn() as conn:
+        conn.execute("VACUUM")
+    return before, get_db_size()
+
+
+def insert_maintenance_log(action, target_table, removed_rows, retention_days,
+                           mode, operator, detail=None):
+    """写入一条维护日志。"""
+    with _get_conn() as conn:
+        conn.execute(
+            "INSERT INTO maintenance_logs (action, target_table, removed_rows, "
+            "retention_days, mode, operator, detail) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (action, target_table, removed_rows, retention_days, mode, operator, detail)
+        )
+        conn.commit()
+
+
+def get_maintenance_logs(limit=50):
+    """维护日志列表（id 倒序）。"""
+    with _get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM maintenance_logs ORDER BY id DESC LIMIT ?",
+            (min(limit, 200),)
+        ).fetchall()
+    return [dict(r) for r in rows]
