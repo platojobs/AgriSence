@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { key: "screen", label: "数据大屏", icon: "bi-display", href: "screen.html" },
   { section: "管理" },
   { key: "devices", label: "设备管理", icon: "bi-cpu", href: "devices.html" },
+  { key: "firmware", label: "固件管理", icon: "bi-cloud-arrow-up", href: "firmware.html" },
   { key: "irrigation", label: "灌溉管理", icon: "bi-water", href: "irrigation.html" },
   { key: "alerts", label: "告警中心", icon: "bi-bell", href: "alerts.html", badge: true },
   { key: "tickets", label: "工单管理", icon: "bi-clipboard2-check", href: "tickets.html" },
@@ -60,7 +61,7 @@ function buildSidebar(activeKey) {
   });
 
   html += '</nav>';
-  html += '<div class="sidebar-footer">v3.4.0 &copy; 2010 AgriSense<br><a href="mobile.html" target="_blank" class="text-light"><i class="bi bi-phone"></i> 移动端</a></div>';
+  html += '<div class="sidebar-footer">v3.5.0 &copy; 2010 AgriSense<br><a href="mobile.html" target="_blank" class="text-light"><i class="bi bi-phone"></i> 移动端</a></div>';
   html += '</aside>';
   return html;
 }

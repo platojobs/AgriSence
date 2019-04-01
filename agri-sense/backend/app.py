@@ -10,12 +10,13 @@ import hashlib
 import functools
 import io
 import csv
+import os
 import random
 import threading
 import time
 import uuid
 
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, Response, send_file
 from flask_cors import CORS
 import paho.mqtt.client as mqtt
 
@@ -53,6 +54,8 @@ from database import (
     get_ticket_stats,
     get_table_stats, count_expired_rows, cleanup_old_rows, vacuum_db,
     get_db_size, insert_maintenance_log, get_maintenance_logs, CLEANABLE_TABLES,
+    insert_firmware, get_firmware_list, get_firmware, get_latest_firmware,
+    set_firmware_latest, inc_firmware_download, delete_firmware,
     get_environment_daily, get_irrigation_stats, get_alert_stats,
     get_farm_activity_stats, get_batch_stats,
 )
@@ -875,6 +878,137 @@ def _auto_cleanup_loop():
         except Exception as e:
             print("auto cleanup error:", e)
         time.sleep(3600)
+
+
+# ---------------------------------------------------------------------------
+# 固件版本管理 API（OTA）
+# 列表/详情登录可查，上传/标记/删除仅管理员，下载登录即可
+# ---------------------------------------------------------------------------
+FIRMWARE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "firmware_store")
+os.makedirs(FIRMWARE_DIR, exist_ok=True)
+ALLOWED_FW_EXT = (".bin", ".hex", ".img", ".zip", ".txt")
+
+
+def _firmware_path(fw):
+    """固件记录对应的存储文件绝对路径。"""
+    return os.path.join(FIRMWARE_DIR, fw["stored_name"]) if fw.get("stored_name") else None
+
+
+@app.route("/api/firmware", methods=["GET"])
+@require_role("viewer")
+def api_firmware_list():
+    """固件列表，?model=esp32 过滤。"""
+    return jsonify({"status": "ok",
+                    "firmware": get_firmware_list(request.args.get("model"))})
+
+
+@app.route("/api/firmware", methods=["POST"])
+@require_role("admin")
+def api_firmware_upload():
+    """上传固件（multipart）：version, device_model, changelog, file"""
+    version = (request.form.get("version") or "").strip()
+    device_model = (request.form.get("device_model") or "").strip()
+    changelog = request.form.get("changelog") or ""
+    file = request.files.get("file")
+    if not version or not device_model:
+        return jsonify({"status": "error", "message": "版本号与设备型号必填"}), 400
+    if not file or not file.filename:
+        return jsonify({"status": "error", "message": "请选择固件文件"}), 400
+    if not file.filename.lower().endswith(ALLOWED_FW_EXT):
+        return jsonify({"status": "error",
+                        "message": "仅支持 %s 格式" % "/".join(ALLOWED_FW_EXT)}), 400
+
+    content = file.read()
+    if len(content) > 20 * 1024 * 1024:
+        return jsonify({"status": "error", "message": "固件文件不能超过 20MB"}), 400
+    checksum = hashlib.md5(content).hexdigest()
+    stored_name = "%s_%s_%s%s" % (
+        device_model, version, uuid.uuid4().hex[:8],
+        os.path.splitext(file.filename)[1].lower())
+
+    session = _current_session()
+    ok, result = insert_firmware(version, device_model, file.filename, stored_name,
+                                 len(content), checksum, changelog, session["username"])
+    if not ok:
+        return jsonify({"status": "error", "message": result}), 409
+    with open(os.path.join(FIRMWARE_DIR, stored_name), "wb") as f:
+        f.write(content)
+
+    _audit("firmware_upload", target="%s@%s" % (device_model, version),
+           detail="上传固件 %s（%d 字节）" % (file.filename, len(content)))
+    # 通知操作员有新固件可用
+    try:
+        notify_roles(["admin", "operator"], "新固件发布",
+                     "%s 发布新版本 %s，可前往固件管理下载" % (device_model, version),
+                     "info")
+    except Exception as e:
+        print("notify error:", e)
+    return jsonify({"status": "ok", "firmware": get_firmware(result)})
+
+
+@app.route("/api/firmware/latest", methods=["GET"])
+def api_firmware_latest():
+    """设备端 OTA 检查：?model=esp32&current=1.0.0 返回最新固件信息与下载地址。"""
+    model = request.args.get("model", "")
+    current = request.args.get("current", "")
+    if not model:
+        return jsonify({"status": "error", "message": "model 必填"}), 400
+    fw = get_latest_firmware(model)
+    if not fw:
+        return jsonify({"status": "ok", "update_available": False})
+    return jsonify({
+        "status": "ok",
+        "update_available": fw["version"] != current,
+        "version": fw["version"],
+        "checksum": fw["checksum"],
+        "size": fw["size"],
+        "changelog": fw["changelog"],
+        "download_url": "/api/firmware/%d/download" % fw["id"],
+    })
+
+
+@app.route("/api/firmware/<int:fw_id>/download", methods=["GET"])
+@require_role("viewer")
+def api_firmware_download(fw_id):
+    """下载固件文件并计数。"""
+    fw = get_firmware(fw_id)
+    if not fw:
+        return jsonify({"status": "error", "message": "固件不存在"}), 404
+    path = _firmware_path(fw)
+    if not path or not os.path.exists(path):
+        return jsonify({"status": "error", "message": "固件文件已丢失"}), 404
+    inc_firmware_download(fw_id)
+    return send_file(path, as_attachment=True, download_name=fw["filename"] or fw["stored_name"])
+
+
+@app.route("/api/firmware/<int:fw_id>/set_latest", methods=["POST"])
+@require_role("admin")
+def api_firmware_set_latest(fw_id):
+    """设为该型号最新版。"""
+    fw = set_firmware_latest(fw_id)
+    if not fw:
+        return jsonify({"status": "error", "message": "固件不存在"}), 404
+    _audit("firmware_set_latest", target="%s@%s" % (fw["device_model"], fw["version"]),
+           detail="设为最新固件")
+    return jsonify({"status": "ok", "firmware": fw})
+
+
+@app.route("/api/firmware/<int:fw_id>", methods=["DELETE"])
+@require_role("admin")
+def api_firmware_delete(fw_id):
+    """删除固件（同时删除存储文件）。"""
+    fw = delete_firmware(fw_id)
+    if not fw:
+        return jsonify({"status": "error", "message": "固件不存在"}), 404
+    path = _firmware_path(fw)
+    if path and os.path.exists(path):
+        try:
+            os.remove(path)
+        except OSError as e:
+            print("firmware file remove error:", e)
+    _audit("firmware_delete", target="%s@%s" % (fw["device_model"], fw["version"]),
+           detail="删除固件")
+    return jsonify({"status": "ok"})
 
 
 # ---------------------------------------------------------------------------

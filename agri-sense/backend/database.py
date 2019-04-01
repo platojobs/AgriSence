@@ -278,6 +278,24 @@ def init_db():
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # 固件版本表：OTA 固件包元数据（文件存于 firmware_store/ 目录）
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS firmware_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                version TEXT NOT NULL,
+                device_model TEXT NOT NULL,
+                filename TEXT,
+                stored_name TEXT,
+                size INTEGER DEFAULT 0,
+                checksum TEXT,
+                changelog TEXT,
+                is_latest INTEGER DEFAULT 0,
+                downloads INTEGER DEFAULT 0,
+                uploaded_by TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(version, device_model)
+            )
+        """)
         conn.commit()
 
 
@@ -1708,3 +1726,99 @@ def get_maintenance_logs(limit=50):
             (min(limit, 200),)
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# 固件版本管理（OTA）
+# ---------------------------------------------------------------------------
+def insert_firmware(version, device_model, filename, stored_name, size,
+                    checksum, changelog, uploaded_by):
+    """登记一个固件版本，返回 (ok, err_or_id)。"""
+    try:
+        with _get_conn() as conn:
+            cur = conn.execute(
+                "INSERT INTO firmware_versions (version, device_model, filename, "
+                "stored_name, size, checksum, changelog, uploaded_by) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (version, device_model, filename, stored_name, size,
+                 checksum, changelog, uploaded_by)
+            )
+            conn.commit()
+            return True, cur.lastrowid
+    except sqlite3.IntegrityError:
+        return False, "该型号下版本号已存在"
+
+
+def get_firmware_list(device_model=None):
+    """固件列表（按型号过滤，id 倒序）。"""
+    with _get_conn() as conn:
+        if device_model:
+            rows = conn.execute(
+                "SELECT * FROM firmware_versions WHERE device_model = ? ORDER BY id DESC",
+                (device_model,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM firmware_versions ORDER BY id DESC"
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_firmware(fw_id):
+    """按 id 取固件记录。"""
+    with _get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM firmware_versions WHERE id = ?", (fw_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_latest_firmware(device_model):
+    """取某型号标记为最新的固件，无则取 id 最大的一条。"""
+    with _get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM firmware_versions WHERE device_model = ? AND is_latest = 1 "
+            "ORDER BY id DESC LIMIT 1", (device_model,)
+        ).fetchone()
+        if row is None:
+            row = conn.execute(
+                "SELECT * FROM firmware_versions WHERE device_model = ? "
+                "ORDER BY id DESC LIMIT 1", (device_model,)
+            ).fetchone()
+    return dict(row) if row else None
+
+
+def set_firmware_latest(fw_id):
+    """将指定固件设为该型号最新版（同型号其他记录取消标记）。"""
+    fw = get_firmware(fw_id)
+    if not fw:
+        return None
+    with _get_conn() as conn:
+        conn.execute(
+            "UPDATE firmware_versions SET is_latest = 0 WHERE device_model = ?",
+            (fw["device_model"],)
+        )
+        conn.execute("UPDATE firmware_versions SET is_latest = 1 WHERE id = ?", (fw_id,))
+        conn.commit()
+    return get_firmware(fw_id)
+
+
+def inc_firmware_download(fw_id):
+    """下载计数 +1。"""
+    with _get_conn() as conn:
+        conn.execute(
+            "UPDATE firmware_versions SET downloads = downloads + 1 WHERE id = ?",
+            (fw_id,)
+        )
+        conn.commit()
+
+
+def delete_firmware(fw_id):
+    """删除固件记录，返回被删记录（供调用方删文件）。"""
+    fw = get_firmware(fw_id)
+    if not fw:
+        return None
+    with _get_conn() as conn:
+        conn.execute("DELETE FROM firmware_versions WHERE id = ?", (fw_id,))
+        conn.commit()
+    return fw
