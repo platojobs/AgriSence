@@ -296,6 +296,21 @@ def init_db():
                 UNIQUE(version, device_model)
             )
         """)
+        # 设备分组表：按大棚/地块归组，便于分区管理与统计
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS device_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                location TEXT,
+                description TEXT,
+                leader TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # devices 表补充 group_id 列（兼容旧库，无需重建表）
+        device_cols = [r["name"] for r in conn.execute("PRAGMA table_info(devices)").fetchall()]
+        if "group_id" not in device_cols:
+            conn.execute("ALTER TABLE devices ADD COLUMN group_id INTEGER")
         conn.commit()
 
 
@@ -397,20 +412,27 @@ def get_recent_logs(limit=20):
 # ---------------------------------------------------------------------------
 # 设备管理
 # ---------------------------------------------------------------------------
-def get_devices():
-    """返回所有设备 list[dict]。"""
+def get_devices(group_id=None):
+    """返回设备列表（含所属分组名），可按分组过滤。"""
+    sql = ("SELECT d.*, g.name AS group_name FROM devices d "
+           "LEFT JOIN device_groups g ON d.group_id = g.id")
+    params = []
+    if group_id is not None:
+        sql += " WHERE d.group_id = ?"
+        params.append(group_id)
+    sql += " ORDER BY d.id ASC"
     with _get_conn() as conn:
-        rows = conn.execute(
-            "SELECT * FROM devices ORDER BY id ASC"
-        ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     return [dict(row) for row in rows]
 
 
 def get_device(device_id):
-    """按 device_id 返回设备 dict，无则 None。"""
+    """按 device_id 返回设备 dict（含分组名），无则 None。"""
     with _get_conn() as conn:
         row = conn.execute(
-            "SELECT * FROM devices WHERE device_id = ?", (device_id,)
+            "SELECT d.*, g.name AS group_name FROM devices d "
+            "LEFT JOIN device_groups g ON d.group_id = g.id "
+            "WHERE d.device_id = ?", (device_id,)
         ).fetchone()
     return dict(row) if row else None
 
@@ -434,6 +456,96 @@ def delete_device(device_id):
     with _get_conn() as conn:
         conn.execute("DELETE FROM devices WHERE device_id = ?", (device_id,))
         conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# 设备分组
+# ---------------------------------------------------------------------------
+def insert_group(name, location="", description="", leader=None):
+    """新增分组，返回 (ok, id_or_err)。"""
+    try:
+        with _get_conn() as conn:
+            cur = conn.execute(
+                "INSERT INTO device_groups (name, location, description, leader) "
+                "VALUES (?, ?, ?, ?)", (name, location, description, leader)
+            )
+            conn.commit()
+            return True, cur.lastrowid
+    except sqlite3.IntegrityError:
+        return False, "分组名称已存在"
+
+
+def get_groups():
+    """分组列表，附带设备数与在线数。"""
+    with _get_conn() as conn:
+        rows = conn.execute(
+            """SELECT g.*,
+                      COUNT(d.id) AS device_count,
+                      SUM(CASE WHEN d.status = 'online' THEN 1 ELSE 0 END) AS online_count
+               FROM device_groups g
+               LEFT JOIN devices d ON d.group_id = g.id
+               GROUP BY g.id
+               ORDER BY g.id ASC"""
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_group(group_id):
+    """按 id 取分组。"""
+    with _get_conn() as conn:
+        row = conn.execute("SELECT * FROM device_groups WHERE id = ?", (group_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def update_group(group_id, name, location, description, leader):
+    """更新分组，返回 (ok, group_or_err)。"""
+    if not get_group(group_id):
+        return False, "分组不存在"
+    try:
+        with _get_conn() as conn:
+            conn.execute(
+                "UPDATE device_groups SET name = ?, location = ?, description = ?, leader = ? "
+                "WHERE id = ?", (name, location, description, leader, group_id)
+            )
+            conn.commit()
+    except sqlite3.IntegrityError:
+        return False, "分组名称已存在"
+    return True, get_group(group_id)
+
+
+def delete_group(group_id):
+    """删除分组：组内设备自动转为未分组。"""
+    if not get_group(group_id):
+        return False
+    with _get_conn() as conn:
+        conn.execute("UPDATE devices SET group_id = NULL WHERE group_id = ?", (group_id,))
+        conn.execute("DELETE FROM device_groups WHERE id = ?", (group_id,))
+        conn.commit()
+    return True
+
+
+def assign_device_group(device_id, group_id):
+    """把设备分配到分组（group_id=None 表示移出分组）。"""
+    with _get_conn() as conn:
+        cur = conn.execute(
+            "UPDATE devices SET group_id = ? WHERE device_id = ?", (group_id, device_id)
+        )
+        conn.commit()
+    return cur.rowcount > 0
+
+
+def get_group_stats():
+    """分组总览：分组数、设备总数、在线设备、未分组设备。"""
+    with _get_conn() as conn:
+        groups = conn.execute("SELECT COUNT(*) AS c FROM device_groups").fetchone()["c"]
+        total = conn.execute("SELECT COUNT(*) AS c FROM devices").fetchone()["c"]
+        online = conn.execute(
+            "SELECT COUNT(*) AS c FROM devices WHERE status = 'online'"
+        ).fetchone()["c"]
+        ungrouped = conn.execute(
+            "SELECT COUNT(*) AS c FROM devices WHERE group_id IS NULL"
+        ).fetchone()["c"]
+    return {"groups": groups, "devices": total, "online": online, "ungrouped": ungrouped}
 
 
 # ---------------------------------------------------------------------------

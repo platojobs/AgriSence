@@ -29,6 +29,8 @@ from database import (
     init_db, insert_reading, get_latest, get_history, get_recent_readings,
     insert_irrigation_log, get_recent_logs,
     get_devices, get_device, upsert_device, delete_device,
+    insert_group, get_groups, get_group, update_group, delete_group,
+    assign_device_group, get_group_stats,
     get_alerts, get_alert, insert_alert, handle_alert,
     get_alert_rules, upsert_alert_rule, delete_alert_rule,
     get_schedules, insert_schedule, update_schedule, delete_schedule,
@@ -1316,6 +1318,88 @@ def api_device_delete(device_id):
     delete_device(device_id)
     _audit("device_delete", target=device_id, detail="删除设备")
     return jsonify({"status": "ok"})
+
+
+# ---------------------------------------------------------------------------
+# 设备分组 API：按大棚/地块归组，支持分配设备与分区统计
+# ---------------------------------------------------------------------------
+@app.route("/api/device-groups", methods=["GET"])
+@require_role("viewer")
+def api_device_groups_list():
+    """分组列表（含设备数/在线数）+ 总览统计。"""
+    return jsonify({"status": "ok", "groups": get_groups(), "stats": get_group_stats()})
+
+
+@app.route("/api/device-groups", methods=["POST"])
+@require_role("operator")
+def api_device_group_create():
+    """新增分组。body: {name, location, description, leader}"""
+    data = request.get_json(silent=True) or request.form
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"status": "error", "message": "分组名称不能为空"}), 400
+    if len(name) > 40:
+        return jsonify({"status": "error", "message": "分组名称不能超过 40 字"}), 400
+    ok, result = insert_group(name, data.get("location") or "",
+                              data.get("description") or "",
+                              (data.get("leader") or "").strip() or None)
+    if not ok:
+        return jsonify({"status": "error", "message": result}), 409
+    _audit("group_create", target=name, detail="新增设备分组「%s」" % name)
+    return jsonify({"status": "ok", "group": get_group(result)})
+
+
+@app.route("/api/device-groups/<int:group_id>", methods=["PUT"])
+@require_role("operator")
+def api_device_group_update(group_id):
+    """编辑分组。"""
+    data = request.get_json(silent=True) or request.form
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"status": "error", "message": "分组名称不能为空"}), 400
+    ok, result = update_group(group_id, name, data.get("location") or "",
+                              data.get("description") or "",
+                              (data.get("leader") or "").strip() or None)
+    if not ok:
+        return jsonify({"status": "error", "message": result}), 400
+    _audit("group_update", target=name, detail="编辑设备分组「%s」" % name)
+    return jsonify({"status": "ok", "group": result})
+
+
+@app.route("/api/device-groups/<int:group_id>", methods=["DELETE"])
+@require_role("admin")
+def api_device_group_delete(group_id):
+    """删除分组（组内设备自动转为未分组）。"""
+    group = get_group(group_id)
+    if not group:
+        return jsonify({"status": "error", "message": "分组不存在"}), 404
+    delete_group(group_id)
+    _audit("group_delete", target=group["name"],
+           detail="删除设备分组「%s」，组内设备转为未分组" % group["name"])
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/devices/<device_id>/group", methods=["PUT"])
+@require_role("operator")
+def api_device_assign_group(device_id):
+    """把设备分配到分组。body: {group_id: 1 或 null}"""
+    if not get_device(device_id):
+        return jsonify({"status": "error", "message": "设备不存在"}), 404
+    data = request.get_json(silent=True) or request.form
+    raw = data.get("group_id")
+    group_id = None
+    if raw not in (None, "", "null"):
+        try:
+            group_id = int(raw)
+        except (TypeError, ValueError):
+            return jsonify({"status": "error", "message": "group_id 不合法"}), 400
+        if not get_group(group_id):
+            return jsonify({"status": "error", "message": "分组不存在"}), 400
+    assign_device_group(device_id, group_id)
+    group_name = get_group(group_id)["name"] if group_id else "未分组"
+    _audit("device_assign_group", target=device_id,
+           detail="设备「%s」归入分组「%s」" % (device_id, group_name))
+    return jsonify({"status": "ok", "device": get_device(device_id)})
 
 
 # ---------------------------------------------------------------------------
