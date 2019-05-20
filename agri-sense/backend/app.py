@@ -59,6 +59,7 @@ from database import (
     get_ticket_stats,
     get_table_stats, count_expired_rows, cleanup_old_rows, vacuum_db,
     get_db_size, insert_maintenance_log, get_maintenance_logs, CLEANABLE_TABLES,
+    clear_demo_irrigation_logs,
     insert_firmware, get_firmware_list, get_firmware, get_latest_firmware,
     set_firmware_latest, inc_firmware_download, delete_firmware,
     get_environment_daily, get_irrigation_stats, get_alert_stats,
@@ -1850,6 +1851,46 @@ def api_reports_farm():
 def api_reports_batch():
     """溯源批次质量状态分布 + 作物类型分布。"""
     return jsonify(get_batch_stats())
+
+
+@app.route("/api/reports/demo", methods=["POST"])
+@require_role("admin")
+def api_reports_demo():
+    """一键演示：重建报表演示数据（近 N 天模拟读数 + 每个 06:30/18:30 灌溉日志）。"""
+    data = request.get_json(silent=True) or request.form
+    try:
+        days = int(data.get("days", 7))
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "参数错误"}), 400
+    if not 1 <= days <= 30:
+        return jsonify({"status": "error", "message": "天数需在 1-30 之间"}), 400
+
+    removed_logs = clear_demo_irrigation_logs()
+    delete_mock_readings()
+    devices = get_devices()
+    device_id = devices[0]["device_id"] if devices else "esp32_001"
+    rows = _build_mock_rows(device_id, days, 30)
+    inserted = insert_readings_bulk(rows)
+
+    start_ts = rows[0][3]
+    log_count = 0
+    for d in range(days):
+        lt = time.localtime(start_ts + d * 86400)
+        for hour, minute in ((6, 30), (18, 30)):
+            start = int(time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday,
+                                     hour, minute, 0, 0, 0, -1)))
+            insert_irrigation_log(
+                "start", "模拟演示：墒情低于阈值，自动灌溉",
+                created_at=time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start)))
+            insert_irrigation_log(
+                "stop", "模拟演示：灌溉 15 分钟后自动停止",
+                created_at=time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start + 900)))
+            log_count += 2
+    _audit("report_demo", target=device_id,
+           detail="一键演示生成 %d 天模拟读数 %d 条、灌溉日志 %d 条" % (days, inserted, log_count))
+    return jsonify({"status": "ok", "days": days, "inserted": inserted,
+                    "irrigation_logs": log_count, "removed_logs": removed_logs,
+                    "device_id": device_id})
 
 
 @app.route("/api/rules/evaluate", methods=["POST"])

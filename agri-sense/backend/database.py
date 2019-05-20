@@ -447,14 +447,28 @@ def get_history(hours=24):
     return result
 
 
-def insert_irrigation_log(action, reason):
-    """插入一条灌溉操作日志。"""
+def insert_irrigation_log(action, reason, created_at=None):
+    """插入一条灌溉操作日志（created_at 可选，用于补录/演示数据）。"""
     with _get_conn() as conn:
-        conn.execute(
-            "INSERT INTO irrigation_logs (action, reason) VALUES (?, ?)",
-            (action, reason)
-        )
+        if created_at:
+            conn.execute(
+                "INSERT INTO irrigation_logs (action, reason, created_at) VALUES (?, ?, ?)",
+                (action, reason, created_at),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO irrigation_logs (action, reason) VALUES (?, ?)",
+                (action, reason),
+            )
         conn.commit()
+
+
+def clear_demo_irrigation_logs():
+    """删除一键演示生成的灌溉日志（reason 以「模拟演示」开头），返回条数。"""
+    with _get_conn() as conn:
+        cur = conn.execute("DELETE FROM irrigation_logs WHERE reason LIKE '模拟演示%'")
+        conn.commit()
+    return cur.rowcount
 
 
 def get_recent_logs(limit=20):
