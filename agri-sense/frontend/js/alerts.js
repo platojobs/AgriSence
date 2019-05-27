@@ -110,6 +110,7 @@ function loadRules() {
   $.get(API_BASE + "/api/alert-rules", renderRules);
   loadRuleStats();
   loadTrend();
+  loadTop();
 }
 
 // ---------- 规则命中趋势 ----------
@@ -141,6 +142,42 @@ function loadTrend() {
     }, true);
     trendChart.resize();
   });
+}
+
+// ---------- Top 规则命中排行 ----------
+function renderTop(d) {
+  const items = d.items || [];
+  $("#top-total").text(d.total > 0 ? `近 ${d.days} 天 ${d.total} 次` : `近 ${d.days} 天`);
+  if (items.length === 0) {
+    $("#rule-top-list").html(
+      `<div class="rt-empty"><i class="bi bi-inbox"></i>近 ${d.days} 天暂无规则命中</div>`
+    );
+    return;
+  }
+  const max = items[0].hits || 1;
+  $("#rule-top-list").html(items.map((it) => {
+    const name = METRIC_LABELS[it.metric] || it.metric;
+    const cond = CONDITION_LABELS[it.condition] || it.condition || "";
+    const th = it.threshold != null ? it.threshold : "";
+    const stopped = it.enabled === 0 ? '<span class="badge bg-light text-muted border">已停用</span>' : "";
+    const width = Math.max(6, Math.round((it.hits * 100) / max));
+    return `<div class="rt-item">
+      <div class="rt-rank r${it.rank}">${it.rank}</div>
+      <div class="rt-main">
+        <div class="rt-title">${name} ${cond}${th} ${levelBadge(it.level)}${stopped}</div>
+        <div class="rt-bar"><i style="width:${width}%"></i></div>
+        <div class="rt-meta">
+          <span>命中 ${it.hits} 次</span><span>占比 ${it.share}%</span>
+          <span>${it.last_hit_at || ""}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join(""));
+}
+
+function loadTop() {
+  const days = parseInt($("#trend-days").val(), 10) || 7;
+  $.get(API_BASE + "/api/alert-rules/top", { days: days, limit: 5 }, renderTop);
 }
 
 function loadTemplates() {
@@ -253,7 +290,10 @@ $(document).ready(function () {
     $(this).val("");
     if (key) applyTemplate(key);
   });
-  $("#trend-days").on("change", loadTrend);
+  $("#trend-days").on("change", function () {
+    loadTrend();
+    loadTop();
+  });
   $(window).on("resize", function () { if (trendChart) trendChart.resize(); });
 
   $(document).on("click", ".btn-handle", function () {

@@ -739,6 +739,43 @@ def get_rule_trend(days=7):
             "total": sum(sum(s["data"]) for s in series)}
 
 
+def get_rule_top(days=7, limit=5):
+    """最近 N 天规则命中 Top 排行：按规则聚合命中次数并补全规则配置。"""
+    days = max(1, min(30, int(days)))
+    limit = max(1, min(10, int(limit)))
+    window = "-%d days" % (days - 1)
+    with _get_conn() as conn:
+        total = conn.execute(
+            "SELECT COUNT(*) AS c FROM rule_hits WHERE date(created_at) >= date('now', ?)",
+            (window,),
+        ).fetchone()["c"]
+        rows = conn.execute(
+            "SELECT rule_id, COALESCE(metric, 'unknown') AS metric, "
+            "COALESCE(level, 'warning') AS level, COUNT(*) AS hits, "
+            "MAX(created_at) AS last_hit_at "
+            "FROM rule_hits WHERE date(created_at) >= date('now', ?) "
+            "GROUP BY rule_id ORDER BY hits DESC, last_hit_at DESC LIMIT ?",
+            (window, limit),
+        ).fetchall()
+        rules = {r["id"]: dict(r) for r in conn.execute("SELECT * FROM alert_rules").fetchall()}
+    items = []
+    for i, r in enumerate(rows, 1):
+        rule = rules.get(r["rule_id"]) or {}
+        items.append({
+            "rank": i,
+            "rule_id": r["rule_id"],
+            "metric": r["metric"],
+            "level": r["level"],
+            "condition": rule.get("condition"),
+            "threshold": rule.get("threshold"),
+            "enabled": rule.get("enabled"),
+            "hits": r["hits"],
+            "share": round(r["hits"] * 100.0 / total, 1) if total else 0,
+            "last_hit_at": r["last_hit_at"],
+        })
+    return {"days": days, "limit": limit, "total": total, "items": items}
+
+
 def set_rules_enabled(enabled, rule_ids=None):
     """批量启用/停用规则（rule_ids 为空表示全部），返回受影响条数。"""
     sql = "UPDATE alert_rules SET enabled = ?"

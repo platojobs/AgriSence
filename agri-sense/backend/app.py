@@ -35,7 +35,7 @@ from database import (
     assign_device_group, get_group_stats,
     get_alerts, get_alert, insert_alert, handle_alert,
     get_alert_rules, upsert_alert_rule, delete_alert_rule,
-    record_rule_trigger, set_rules_enabled, get_rule_stats, get_rule_trend,
+    record_rule_trigger, set_rules_enabled, get_rule_stats, get_rule_trend, get_rule_top,
     get_schedules, insert_schedule, update_schedule, delete_schedule,
     get_overview_stats,
     get_actuators, get_actuator, update_actuator, upsert_actuator,
@@ -1557,6 +1557,21 @@ def api_alert_rule_trend():
     if not 1 <= days <= 30:
         return jsonify({"status": "error", "message": "天数需在 1-30 之间"}), 400
     return jsonify({"status": "ok", **get_rule_trend(days)})
+
+
+@app.route("/api/alert-rules/top", methods=["GET"])
+def api_alert_rule_top():
+    """规则命中 Top 排行：query days（1-30，默认 7）、limit（1-10，默认 5）。"""
+    try:
+        days = int(request.args.get("days", 7))
+        limit = int(request.args.get("limit", 5))
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "参数错误"}), 400
+    if not 1 <= days <= 30:
+        return jsonify({"status": "error", "message": "天数需在 1-30 之间"}), 400
+    if not 1 <= limit <= 10:
+        return jsonify({"status": "error", "message": "排行数量需在 1-10 之间"}), 400
+    return jsonify({"status": "ok", **get_rule_top(days, limit)})
 
 
 @app.route("/api/alert-rules/templates", methods=["GET"])
