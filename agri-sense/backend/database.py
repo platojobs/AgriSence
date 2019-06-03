@@ -645,14 +645,29 @@ def get_alert(alert_id):
     return dict(row) if row else None
 
 
-def insert_alert(type_, level, message, device_id):
-    """插入一条告警。"""
+def insert_alert(type_, level, message, device_id, created_at=None):
+    """插入一条告警（created_at 可选，用于补录/演示数据）。"""
     with _get_conn() as conn:
-        conn.execute(
-            "INSERT INTO alerts (type, level, message, device_id) VALUES (?, ?, ?, ?)",
-            (type_, level, message, device_id)
-        )
+        if created_at:
+            conn.execute(
+                "INSERT INTO alerts (type, level, message, device_id, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (type_, level, message, device_id, created_at),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO alerts (type, level, message, device_id) VALUES (?, ?, ?, ?)",
+                (type_, level, message, device_id)
+            )
         conn.commit()
+
+
+def clear_demo_alerts():
+    """删除一键演示生成的告警（message 以「模拟演示」开头），返回条数。"""
+    with _get_conn() as conn:
+        cur = conn.execute("DELETE FROM alerts WHERE message LIKE '模拟演示%'")
+        conn.commit()
+    return cur.rowcount
 
 
 def handle_alert(alert_id):

@@ -33,7 +33,7 @@ from database import (
     get_devices, get_device, upsert_device, delete_device,
     insert_group, get_groups, get_group, update_group, delete_group,
     assign_device_group, get_group_stats,
-    get_alerts, get_alert, insert_alert, handle_alert,
+    get_alerts, get_alert, insert_alert, handle_alert, clear_demo_alerts,
     get_alert_rules, upsert_alert_rule, delete_alert_rule,
     record_rule_trigger, set_rules_enabled, get_rule_stats, get_rule_trend, get_rule_top,
     get_schedules, insert_schedule, update_schedule, delete_schedule,
@@ -1881,6 +1881,7 @@ def api_reports_demo():
         return jsonify({"status": "error", "message": "天数需在 1-30 之间"}), 400
 
     removed_logs = clear_demo_irrigation_logs()
+    removed_alerts = clear_demo_alerts()
     delete_mock_readings()
     devices = get_devices()
     device_id = devices[0]["device_id"] if devices else "esp32_001"
@@ -1901,10 +1902,44 @@ def api_reports_demo():
                 "stop", "模拟演示：灌溉 15 分钟后自动停止",
                 created_at=time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start + 900)))
             log_count += 2
+
+    # 演示告警：按每天模拟读数的极值生成，填充告警等级分布与趋势图
+    daily = {}
+    for r in rows:
+        day = time.strftime("%Y-%m-%d", time.localtime(r[3]))
+        s = daily.setdefault(day, {"soil": r[1], "temp": r[4], "hum": r[5]})
+        s["soil"] = min(s["soil"], r[1])
+        s["temp"] = max(s["temp"], r[4])
+        s["hum"] = min(s["hum"], r[5])
+
+    alert_count = 0
+
+    def _demo_alert(day, hour, minute, type_, level, message):
+        nonlocal alert_count
+        ts = int(time.mktime(time.strptime(day, "%Y-%m-%d"))) + hour * 3600 + minute * 60
+        insert_alert(type_, level, message, device_id,
+                     created_at=time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts)))
+        alert_count += 1
+
+    for day in sorted(daily):
+        s = daily[day]
+        if s["soil"] < 35:
+            _demo_alert(day, 8, 40, "soil_moisture", "warning",
+                        "模拟演示：土壤墒情 %s%% 低于阈值 35%%" % s["soil"])
+        if s["temp"] > 28:
+            _demo_alert(day, 14, 20, "temperature",
+                        "critical" if s["temp"] > 32 else "warning",
+                        "模拟演示：温度 %s°C 超过阈值 28°C" % s["temp"])
+        if s["hum"] < 55:
+            _demo_alert(day, 3, 10, "humidity", "info",
+                        "模拟演示：湿度 %s%% 低于阈值 55%%" % s["hum"])
+
     _audit("report_demo", target=device_id,
-           detail="一键演示生成 %d 天模拟读数 %d 条、灌溉日志 %d 条" % (days, inserted, log_count))
+           detail="一键演示生成 %d 天模拟读数 %d 条、灌溉日志 %d 条、演示告警 %d 条"
+                  % (days, inserted, log_count, alert_count))
     return jsonify({"status": "ok", "days": days, "inserted": inserted,
-                    "irrigation_logs": log_count, "removed_logs": removed_logs,
+                    "irrigation_logs": log_count, "alerts": alert_count,
+                    "removed_logs": removed_logs, "removed_alerts": removed_alerts,
                     "device_id": device_id})
 
 
