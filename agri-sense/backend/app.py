@@ -53,9 +53,10 @@ from database import (
     insert_audit_log, get_audit_logs, get_audit_stats,
     export_rows, export_count, EXPORT_TABLES,
     get_setting, set_setting, get_all_settings,
-    insert_notification, notify_roles, get_notifications,
+    insert_notification, notify_roles, get_notifications, clear_demo_notifications,
     mark_notification_read, mark_all_notifications_read,
     insert_ticket, get_tickets, get_ticket, update_ticket, delete_ticket,
+    clear_demo_tickets,
     get_ticket_stats,
     get_table_stats, count_expired_rows, cleanup_old_rows, vacuum_db,
     get_db_size, insert_maintenance_log, get_maintenance_logs, CLEANABLE_TABLES,
@@ -1882,6 +1883,8 @@ def api_reports_demo():
 
     removed_logs = clear_demo_irrigation_logs()
     removed_alerts = clear_demo_alerts()
+    removed_tickets = clear_demo_tickets()
+    removed_notifications = clear_demo_notifications()
     delete_mock_readings()
     devices = get_devices()
     device_id = devices[0]["device_id"] if devices else "esp32_001"
@@ -1934,12 +1937,51 @@ def api_reports_demo():
             _demo_alert(day, 3, 10, "humidity", "info",
                         "模拟演示：湿度 %s%% 低于阈值 55%%" % s["hum"])
 
+    # 演示工单与通知：填充移动端「我的待办 / 待接单」与通知列表
+    now = int(time.time())
+
+    def _ago(hours):
+        return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now - hours * 3600))
+
+    op_user = get_user_by_username("operator")
+    op_name = op_user["username"] if op_user else None
+    creator = _current_session()["username"]
+    ticket_count = note_count = 0
+    if op_name:
+        demo_tickets = [
+            ("模拟演示：更换三号节点电池", "三号监测节点电量低于 15%，请携带备用电池现场更换。",
+             "ops", "high", "open", None, None, _ago(30)),
+            ("模拟演示：巡检一号大棚滴灌管路", "检查滴灌主管压力与滴头堵塞情况，记录各支路流量。",
+             "ops", "medium", "processing", op_name, None, _ago(18)),
+            ("模拟演示：校准土壤墒情传感器", "与标准测量值偏差超过 3%，需现场重新标定。",
+             "maintenance", "medium", "open", op_name, None, _ago(6)),
+            ("模拟演示：清理摄像头镜头", "画面出现水渍模糊，已擦拭镜头并重新对焦。",
+             "maintenance", "low", "resolved", op_name, "已擦拭镜头并重新对焦，画面恢复清晰。", _ago(2)),
+        ]
+        for title, desc, ttype, priority, status, assignee, resolution, ts in demo_tickets:
+            insert_ticket(title, desc, creator, ttype=ttype, priority=priority,
+                          assignee=assignee, status=status, created_at=ts,
+                          resolution=resolution)
+            ticket_count += 1
+
+        demo_notes = [
+            ("模拟演示：土壤墒情偏低", "一号大棚墒情低于阈值 30%，已触发自动灌溉。", "warning", _ago(20)),
+            ("模拟演示：工单已指派给您", "工单「巡检一号大棚滴灌管路」已指派，请及时处理。", "info", _ago(8)),
+            ("模拟演示：环境日报已生成", "近 7 天环境统计与灌溉记录已生成，可在报表中心查看。", "info", _ago(1)),
+        ]
+        for title, content, ntype, ts in demo_notes:
+            insert_notification(op_name, title, content, ntype, created_at=ts)
+            note_count += 1
+
     _audit("report_demo", target=device_id,
-           detail="一键演示生成 %d 天模拟读数 %d 条、灌溉日志 %d 条、演示告警 %d 条"
-                  % (days, inserted, log_count, alert_count))
+           detail="一键演示生成 %d 天模拟读数 %d 条、灌溉日志 %d 条、告警 %d 条、工单 %d 张、通知 %d 条"
+                  % (days, inserted, log_count, alert_count, ticket_count, note_count))
     return jsonify({"status": "ok", "days": days, "inserted": inserted,
                     "irrigation_logs": log_count, "alerts": alert_count,
+                    "tickets": ticket_count, "notifications": note_count,
                     "removed_logs": removed_logs, "removed_alerts": removed_alerts,
+                    "removed_tickets": removed_tickets,
+                    "removed_notifications": removed_notifications,
                     "device_id": device_id})
 
 

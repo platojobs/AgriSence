@@ -217,7 +217,7 @@ function loadAll() {
 
 // ---------- 一键演示 ----------
 function runDemo() {
-  if (!confirm(`将清空并重建近 ${currentDays} 天的模拟读数、演示灌溉日志与演示告警，是否继续？`)) return;
+  if (!confirm(`将清空并重建近 ${currentDays} 天的演示数据（读数、灌溉、告警、工单、通知），是否继续？`)) return;
   const btn = $("#btn-demo").prop("disabled", true);
   $.ajax({
     url: API_BASE + "/api/reports/demo",
@@ -226,7 +226,7 @@ function runDemo() {
     headers: { "X-Auth-Token": getAuthToken() },
     data: JSON.stringify({ days: currentDays }),
     success: function (d) {
-      alert(`演示数据已就绪：${d.inserted} 条环境读数、${d.irrigation_logs} 条灌溉日志、${d.alerts} 条演示告警（近 ${d.days} 天）`);
+      alert(`演示数据已就绪：${d.inserted} 条环境读数、${d.irrigation_logs} 条灌溉日志、${d.alerts} 条告警、${d.tickets} 张工单、${d.notifications} 条通知（近 ${d.days} 天）`);
       loadAll();
     },
     error: function (xhr) {

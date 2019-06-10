@@ -1765,14 +1765,29 @@ def get_all_settings():
 # 站内通知
 # ---------------------------------------------------------------------------
 
-def insert_notification(username, title, content, ntype="info"):
-    """给单个用户投递一条通知。"""
+def insert_notification(username, title, content, ntype="info", created_at=None):
+    """给单个用户投递一条通知（created_at 可选，用于补录/演示数据）。"""
     with _get_conn() as conn:
-        conn.execute(
-            "INSERT INTO notifications (username, title, content, type) VALUES (?, ?, ?, ?)",
-            (username, title, content, ntype)
-        )
+        if created_at:
+            conn.execute(
+                "INSERT INTO notifications (username, title, content, type, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (username, title, content, ntype, created_at)
+            )
+        else:
+            conn.execute(
+                "INSERT INTO notifications (username, title, content, type) VALUES (?, ?, ?, ?)",
+                (username, title, content, ntype)
+            )
         conn.commit()
+
+
+def clear_demo_notifications():
+    """删除一键演示生成的通知（title 以「模拟演示」开头），返回条数。"""
+    with _get_conn() as conn:
+        cur = conn.execute("DELETE FROM notifications WHERE title LIKE '模拟演示%'")
+        conn.commit()
+    return cur.rowcount
 
 
 def notify_roles(roles, title, content, ntype="info"):
@@ -1841,19 +1856,38 @@ def _next_ticket_no(conn):
 
 
 def insert_ticket(title, description, creator, ttype="ops", priority="medium",
-                  alert_id=None, assignee=None):
-    """创建工单，返回新工单 dict。"""
+                  alert_id=None, assignee=None, status="open", created_at=None,
+                  resolution=None):
+    """创建工单，返回新工单 dict（status/created_at 可选，用于补录/演示数据）。"""
     with _get_conn() as conn:
         ticket_no = _next_ticket_no(conn)
-        cur = conn.execute(
-            "INSERT INTO tickets (ticket_no, title, description, type, priority, "
-            "status, alert_id, creator, assignee, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, CURRENT_TIMESTAMP)",
-            (ticket_no, title, description, ttype, priority, alert_id, creator, assignee)
-        )
+        if created_at:
+            cur = conn.execute(
+                "INSERT INTO tickets (ticket_no, title, description, type, priority, "
+                "status, alert_id, creator, assignee, resolution, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (ticket_no, title, description, ttype, priority, status, alert_id,
+                 creator, assignee, resolution, created_at, created_at)
+            )
+        else:
+            cur = conn.execute(
+                "INSERT INTO tickets (ticket_no, title, description, type, priority, "
+                "status, alert_id, creator, assignee, resolution, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                (ticket_no, title, description, ttype, priority, status, alert_id,
+                 creator, assignee, resolution)
+            )
         conn.commit()
         row = conn.execute("SELECT * FROM tickets WHERE id = ?", (cur.lastrowid,)).fetchone()
     return dict(row)
+
+
+def clear_demo_tickets():
+    """删除一键演示生成的工单（title 以「模拟演示」开头），返回条数。"""
+    with _get_conn() as conn:
+        cur = conn.execute("DELETE FROM tickets WHERE title LIKE '模拟演示%'")
+        conn.commit()
+    return cur.rowcount
 
 
 def get_tickets(status=None, assignee=None, creator=None, keyword=None, limit=200):
