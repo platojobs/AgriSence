@@ -933,14 +933,28 @@ def get_farm_logs(limit=100):
     return [dict(row) for row in rows]
 
 
-def insert_farm_log(type_, description, operator="系统"):
-    """插入一条农事日志。"""
+def insert_farm_log(type_, description, operator="系统", created_at=None):
+    """插入一条农事日志（created_at 可选，用于补录/演示数据）。"""
     with _get_conn() as conn:
-        conn.execute(
-            "INSERT INTO farm_logs (type, description, operator) VALUES (?, ?, ?)",
-            (type_, description, operator)
-        )
+        if created_at:
+            conn.execute(
+                "INSERT INTO farm_logs (type, description, operator, created_at) VALUES (?, ?, ?, ?)",
+                (type_, description, operator, created_at)
+            )
+        else:
+            conn.execute(
+                "INSERT INTO farm_logs (type, description, operator) VALUES (?, ?, ?)",
+                (type_, description, operator)
+            )
         conn.commit()
+
+
+def clear_demo_farm_logs():
+    """删除一键演示生成的农事日志（description 以「模拟演示」开头），返回条数。"""
+    with _get_conn() as conn:
+        cur = conn.execute("DELETE FROM farm_logs WHERE description LIKE '模拟演示%'")
+        conn.commit()
+    return cur.rowcount
 
 
 def delete_farm_log(log_id):
@@ -2048,15 +2062,32 @@ def vacuum_db():
 
 
 def insert_maintenance_log(action, target_table, removed_rows, retention_days,
-                           mode, operator, detail=None):
-    """写入一条维护日志。"""
+                           mode, operator, detail=None, created_at=None):
+    """写入一条维护日志（created_at 可选，用于补录/演示数据）。"""
     with _get_conn() as conn:
-        conn.execute(
-            "INSERT INTO maintenance_logs (action, target_table, removed_rows, "
-            "retention_days, mode, operator, detail) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (action, target_table, removed_rows, retention_days, mode, operator, detail)
-        )
+        if created_at:
+            conn.execute(
+                "INSERT INTO maintenance_logs (action, target_table, removed_rows, "
+                "retention_days, mode, operator, detail, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (action, target_table, removed_rows, retention_days, mode, operator,
+                 detail, created_at)
+            )
+        else:
+            conn.execute(
+                "INSERT INTO maintenance_logs (action, target_table, removed_rows, "
+                "retention_days, mode, operator, detail) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (action, target_table, removed_rows, retention_days, mode, operator, detail)
+            )
         conn.commit()
+
+
+def clear_demo_maintenance_logs():
+    """删除一键演示生成的维护日志（detail 以「模拟演示」开头），返回条数。"""
+    with _get_conn() as conn:
+        cur = conn.execute("DELETE FROM maintenance_logs WHERE detail LIKE '模拟演示%'")
+        conn.commit()
+    return cur.rowcount
 
 
 def get_maintenance_logs(limit=50):

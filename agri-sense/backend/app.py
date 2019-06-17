@@ -39,7 +39,7 @@ from database import (
     get_schedules, insert_schedule, update_schedule, delete_schedule,
     get_overview_stats,
     get_actuators, get_actuator, update_actuator, upsert_actuator,
-    get_farm_logs, insert_farm_log, delete_farm_log,
+    get_farm_logs, insert_farm_log, delete_farm_log, clear_demo_farm_logs,
     get_batches, get_batch, insert_batch, update_batch_quality,
     get_knowledge, get_knowledge_article, insert_knowledge,
     update_knowledge, delete_knowledge,
@@ -60,7 +60,7 @@ from database import (
     get_ticket_stats,
     get_table_stats, count_expired_rows, cleanup_old_rows, vacuum_db,
     get_db_size, insert_maintenance_log, get_maintenance_logs, CLEANABLE_TABLES,
-    clear_demo_irrigation_logs,
+    clear_demo_irrigation_logs, clear_demo_maintenance_logs,
     insert_firmware, get_firmware_list, get_firmware, get_latest_firmware,
     set_firmware_latest, inc_firmware_download, delete_firmware,
     get_environment_daily, get_irrigation_stats, get_alert_stats,
@@ -1885,6 +1885,8 @@ def api_reports_demo():
     removed_alerts = clear_demo_alerts()
     removed_tickets = clear_demo_tickets()
     removed_notifications = clear_demo_notifications()
+    removed_farm_logs = clear_demo_farm_logs()
+    removed_maint_logs = clear_demo_maintenance_logs()
     delete_mock_readings()
     devices = get_devices()
     device_id = devices[0]["device_id"] if devices else "esp32_001"
@@ -1973,15 +1975,57 @@ def api_reports_demo():
             insert_notification(op_name, title, content, ntype, created_at=ts)
             note_count += 1
 
+    # 演示农事日志：填充报表农事活动分布与批次溯源时间线
+    farm_count = 0
+    farm_types = [
+        ("施肥", "模拟演示：一号大棚追施复合肥 15 kg，每亩 10 kg"),
+        ("除草", "模拟演示：人工除草，清理三号大棚杂草约 2 ㎡"),
+        ("浇水", "模拟演示：滴灌系统灌溉 20 分钟，土壤墒情回升 5%"),
+        ("病虫害防治", "模拟演示：喷施生物农药 500 ml，重点防治蚜虫"),
+        ("播种", "模拟演示：新播番茄苗 120 株，株距 35 cm"),
+        ("采收", "模拟演示：采收番茄约 20 kg，送入质检区"),
+    ]
+    # 覆盖近 days 天，每天至少 1 条，总计不超过 days * 2
+    farm_total = min(days * 2, 12)
+    import random as _rand
+    _rand.seed(days * 7)  # 同天数同一分布，便于比对
+    for i in range(farm_total):
+        t, desc = farm_types[_rand.randrange(len(farm_types))]
+        days_ago = _rand.randrange(1, days + 1)
+        ts = time.strftime("%Y-%m-%d %H:%M:%S",
+                           time.localtime(int(time.time()) - days_ago * 86400 - _rand.randrange(9 * 3600, 17 * 3600)))
+        insert_farm_log(t, desc, op_name or creator, created_at=ts)
+        farm_count += 1
+
+    # 演示维护日志：填充维护日志列表（数据清理 + 固件发布等）
+    maint_count = 0
+    maint_ops = [
+        ("cleanup", "sensor_readings", 2000, 90, "manual", "数据清理：删除 90 天前传感器读数"),
+        ("cleanup", "alerts", 120, 180, "auto", "自动清理：删除 180 天前已处理告警"),
+        ("cleanup", "audit_logs", 500, 365, "manual", "数据清理：删除 1 年前操作审计日志"),
+        ("vacuum", "-", 0, None, "manual", "模拟演示：VACUUM 压缩数据库体积"),
+        ("firmware_publish", "-", 0, None, "manual", "模拟演示：发布固件 v1.4.0，覆盖 esp32/esp8266 型号"),
+    ]
+    for i, (action, target, removed, days_, mode, detail) in enumerate(maint_ops[:4]):
+        days_ago = 3 - i
+        ts = time.strftime("%Y-%m-%d %H:%M:%S",
+                           time.localtime(int(time.time()) - days_ago * 86400))
+        insert_maintenance_log(action, target, removed, days_, mode, creator,
+                               detail=detail, created_at=ts)
+        maint_count += 1
+
     _audit("report_demo", target=device_id,
-           detail="一键演示生成 %d 天模拟读数 %d 条、灌溉日志 %d 条、告警 %d 条、工单 %d 张、通知 %d 条"
-                  % (days, inserted, log_count, alert_count, ticket_count, note_count))
+           detail="一键演示生成 %d 天模拟读数 %d 条、灌溉日志 %d 条、告警 %d 条、工单 %d 张、通知 %d 条、农事 %d 条、维护 %d 条"
+                  % (days, inserted, log_count, alert_count, ticket_count, note_count, farm_count, maint_count))
     return jsonify({"status": "ok", "days": days, "inserted": inserted,
                     "irrigation_logs": log_count, "alerts": alert_count,
                     "tickets": ticket_count, "notifications": note_count,
+                    "farm_logs": farm_count, "maintenance_logs": maint_count,
                     "removed_logs": removed_logs, "removed_alerts": removed_alerts,
                     "removed_tickets": removed_tickets,
                     "removed_notifications": removed_notifications,
+                    "removed_farm_logs": removed_farm_logs,
+                    "removed_maint_logs": removed_maint_logs,
                     "device_id": device_id})
 
 
