@@ -226,15 +226,64 @@ def seed_site_contents():
     """播种站点默认内容（存在则覆盖为默认，便于 CMS 改前有基准）。"""
     defaults = [
         ("about", "关于我们",
-         """<h3 style="font-weight:700;color:#1b5e20;">让农业更智慧，让丰收更简单</h3>
-<p style="line-height:1.9;color:#555;">
-AgriSense 智慧农业科技有限公司成立于 2010 年，专注于农业物联网、农业大数据与人工智能技术的研发与应用。
-我们为设施农业、大田种植、畜牧养殖等场景提供「感知-决策-控制-溯源」全链路数字化解决方案，
-核心产品涵盖环境监测终端、智能灌溉控制系统、农产品质量追溯平台与 AI 病害识别服务，
-帮助种植主体降本增效、提质增收，推动农业生产方式向数字化、智能化转型。
-</p>
-<h6 style="font-weight:700;color:#2e7d32;margin-top:22px;">我们的使命</h6>
-<p style="line-height:1.9;color:#555;">让每一寸土地都有数据支撑，让每一次生产都有迹可循。以技术赋能农业，让种植更科学、管理更高效、产品更安全。</p>"""),
+         """
+<div class="about-hero mb-4">
+  <h3><i class="bi bi-flower1"></i> 让农业更智慧，让丰收更简单</h3>
+  <p class="mt-3">
+    AgriSense 智慧农业科技有限公司成立于 2010 年，专注于农业物联网、农业大数据与人工智能技术的研发与应用。
+    我们为设施农业、大田种植、畜牧养殖等场景提供「感知-决策-控制-溯源」全链路数字化解决方案，
+    核心产品涵盖环境监测终端、智能灌溉控制系统、农产品质量追溯平台与 AI 病害识别服务，
+    帮助种植主体降本增效、提质增收，推动农业生产方式向数字化、智能化转型。
+  </p>
+</div>
+
+<!-- 核心数据 -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3"><div class="sensor-card num-card"><div class="num">14<span class="fs-6">年</span></div><div class="lbl">行业深耕经验</div></div></div>
+  <div class="col-6 col-md-3"><div class="sensor-card num-card"><div class="num">12,000<span class="fs-6">+</span></div><div class="lbl">服务种植主体</div></div></div>
+  <div class="col-6 col-md-3"><div class="sensor-card num-card"><div class="num">86<span class="fs-6">万亩</span></div><div class="lbl">累计覆盖种植面积</div></div></div>
+  <div class="col-6 col-md-3"><div class="sensor-card num-card"><div class="num">35,000<span class="fs-6">+</span></div><div class="lbl">在线监测设备</div></div></div>
+</div>
+
+<div class="row g-3 mb-4">
+  <!-- 发展历程 -->
+  <div class="col-lg-6">
+    <div class="sensor-card h-100">
+      <h6 class="mb-3"><i class="bi bi-signpost-split"></i> 发展历程</h6>
+      <div class="milestone"><div class="year">2010</div><div class="txt">公司成立，推出第一代温室环境监测终端，进入设施农业物联网领域</div></div>
+      <div class="milestone"><div class="year">2012</div><div class="txt">智能灌溉控制系统上线，实现「监测+控制」闭环，服务面积突破 10 万亩</div></div>
+      <div class="milestone"><div class="year">2014</div><div class="txt">发布农业大数据平台，接入设备破万台，获高新技术企业认定</div></div>
+      <div class="milestone"><div class="year">2016</div><div class="txt">农产品溯源系统上线，率先实现「一批次一码」全程可追溯</div></div>
+      <div class="milestone"><div class="year">2018</div><div class="txt">AI 病害图像识别服务发布，识别准确率达行业领先水平</div></div>
+      <div class="milestone"><div class="year">2010 至今</div><div class="txt">构建「感知-决策-控制-溯源」全链路产品矩阵，持续服务农业数字化转型</div></div>
+    </div>
+  </div>
+
+  <!-- 核心团队 + 荣誉 -->
+  <div class="col-lg-6">
+    <div class="sensor-card mb-3">
+      <h6 class="mb-3"><i class="bi bi-people"></i> 核心团队</h6>
+      <div class="row g-3">
+        <div class="col-4 team-card"><div class="avatar"><i class="bi bi-person"></i></div><div class="fw-bold small">陈立农</div><div class="text-muted" style="font-size:11px">创始人 / CEO</div></div>
+        <div class="col-4 team-card"><div class="avatar"><i class="bi bi-person"></i></div><div class="fw-bold small">王耘</div><div class="text-muted" style="font-size:11px">首席技术官</div></div>
+        <div class="col-4 team-card"><div class="avatar"><i class="bi bi-person"></i></div><div class="fw-bold small">李穗</div><div class="text-muted" style="font-size:11px">农业科学家</div></div>
+      </div>
+      <p class="text-muted small mt-3 mb-0">
+        团队由农业科学、物联网工程、人工智能领域的专家组成，研发人员占比超过 60%，
+        与多所农业院校建立联合实验室，持续推动产学研成果转化。
+      </p>
+    </div>
+    <div class="sensor-card">
+      <h6 class="mb-2"><i class="bi bi-award"></i> 荣誉资质</h6>
+      <div class="honor-item"><i class="bi bi-trophy"></i> 国家高新技术企业</div>
+      <div class="honor-item"><i class="bi bi-trophy"></i> 农业物联网行业创新示范企业</div>
+      <div class="honor-item"><i class="bi bi-trophy"></i> 智慧农业解决方案优秀服务商</div>
+      <div class="honor-item"><i class="bi bi-trophy"></i> ISO9001 质量管理体系认证</div>
+      <div class="honor-item"><i class="bi bi-trophy"></i> 30+ 项发明专利与软件著作权</div>
+    </div>
+  </div>
+</div>
+"""),
         ("faq", "问题解答",
          """<h6 style="color:#2e7d32;font-weight:700;margin-top:20px;"><i class="bi bi-box-seam"></i> 产品与功能</h6>
 <p style="line-height:1.8;color:#555;"><strong>Q1：AgriSense 系统包含哪些核心功能？</strong><br>
