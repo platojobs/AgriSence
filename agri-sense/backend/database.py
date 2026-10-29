@@ -311,6 +311,12 @@ def init_db():
         device_cols = [r["name"] for r in conn.execute("PRAGMA table_info(devices)").fetchall()]
         if "group_id" not in device_cols:
             conn.execute("ALTER TABLE devices ADD COLUMN group_id INTEGER")
+        # alert_rules 表补充命中统计列（命中次数 / 最近触发时间）
+        rule_cols = [r["name"] for r in conn.execute("PRAGMA table_info(alert_rules)").fetchall()]
+        if "trigger_count" not in rule_cols:
+            conn.execute("ALTER TABLE alert_rules ADD COLUMN trigger_count INTEGER DEFAULT 0")
+        if "last_triggered_at" not in rule_cols:
+            conn.execute("ALTER TABLE alert_rules ADD COLUMN last_triggered_at TEXT")
         conn.commit()
 
 
@@ -621,6 +627,43 @@ def delete_alert_rule(rule_id):
     with _get_conn() as conn:
         conn.execute("DELETE FROM alert_rules WHERE id=?", (rule_id,))
         conn.commit()
+
+
+def record_rule_trigger(rule_id):
+    """规则命中计数 +1，并记录最近触发时间。"""
+    with _get_conn() as conn:
+        conn.execute(
+            "UPDATE alert_rules SET trigger_count = COALESCE(trigger_count, 0) + 1, "
+            "last_triggered_at = CURRENT_TIMESTAMP WHERE id = ?", (rule_id,)
+        )
+        conn.commit()
+
+
+def set_rules_enabled(enabled, rule_ids=None):
+    """批量启用/停用规则（rule_ids 为空表示全部），返回受影响条数。"""
+    sql = "UPDATE alert_rules SET enabled = ?"
+    params = [1 if enabled else 0]
+    if rule_ids:
+        sql += " WHERE id IN (%s)" % ",".join("?" * len(rule_ids))
+        params += list(rule_ids)
+    with _get_conn() as conn:
+        cur = conn.execute(sql, params)
+        conn.commit()
+    return cur.rowcount
+
+
+def get_rule_stats():
+    """规则统计：总数、启用数、累计命中次数。"""
+    with _get_conn() as conn:
+        total = conn.execute("SELECT COUNT(*) AS c FROM alert_rules").fetchone()["c"]
+        enabled = conn.execute(
+            "SELECT COUNT(*) AS c FROM alert_rules WHERE enabled = 1"
+        ).fetchone()["c"]
+        triggers = conn.execute(
+            "SELECT COALESCE(SUM(trigger_count), 0) AS c FROM alert_rules"
+        ).fetchone()["c"]
+    return {"total": total, "enabled": enabled,
+            "disabled": total - enabled, "triggers": triggers}
 
 
 # ---------------------------------------------------------------------------

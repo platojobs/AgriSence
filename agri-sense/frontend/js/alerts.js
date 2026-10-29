@@ -80,7 +80,7 @@ function handleAlert(id) {
 function renderRules(rules) {
   const tbody = $("#rules-table");
   if (!rules || rules.length === 0) {
-    tbody.html('<tr><td colspan="6" class="text-center text-muted py-3">暂无规则</td></tr>');
+    tbody.html('<tr><td colspan="8" class="text-center text-muted py-3">暂无规则</td></tr>');
     return;
   }
   tbody.html(rules.map((r) => `
@@ -90,6 +90,8 @@ function renderRules(rules) {
       <td>${r.threshold}</td>
       <td>${levelBadge(r.level)}</td>
       <td>${r.enabled ? '<i class="bi bi-toggle-on text-success"></i>' : '<i class="bi bi-toggle-off text-muted"></i>'}</td>
+      <td><span class="badge bg-light text-dark border">${r.trigger_count || 0}</span></td>
+      <td class="text-nowrap"><small class="text-muted">${r.last_triggered_at || "--"}</small></td>
       <td class="text-end">
         <button class="btn btn-sm btn-outline-primary btn-rule-edit" data-id="${r.id}"><i class="bi bi-pencil"></i></button>
         <button class="btn btn-sm btn-outline-danger btn-rule-del" data-id="${r.id}"><i class="bi bi-trash"></i></button>
@@ -98,8 +100,58 @@ function renderRules(rules) {
   `).join(""));
 }
 
+function loadRuleStats() {
+  $.get(API_BASE + "/api/alert-rules/stats", function (s) {
+    $("#rule-stats").text(`共 ${s.total} 条 · 启用 ${s.enabled} · 停用 ${s.disabled} · 累计命中 ${s.triggers} 次`);
+  });
+}
+
 function loadRules() {
   $.get(API_BASE + "/api/alert-rules", renderRules);
+  loadRuleStats();
+}
+
+function loadTemplates() {
+  $.get(API_BASE + "/api/alert-rules/templates", function (list) {
+    const sel = $("#tpl-select");
+    (list || []).forEach((t) => {
+      sel.append(`<option value="${t.key}">${t.name}（${t.count} 条）</option>`);
+    });
+  });
+}
+
+function applyTemplate(key) {
+  $.ajax({
+    url: API_BASE + "/api/alert-rules/templates/apply",
+    method: "POST",
+    contentType: "application/json",
+    data: JSON.stringify({ key: key }),
+    success: function (res) {
+      alert(`模板已套用：新增 ${res.created} 条，跳过重复 ${res.skipped} 条`);
+      loadRules();
+    },
+    error: function (xhr) {
+      alert((xhr.responseJSON && xhr.responseJSON.message) || "套用模板失败");
+    },
+  });
+}
+
+function bulkToggleRules(enabled) {
+  const label = enabled ? "启用" : "停用";
+  if (!confirm(`确认${label}全部告警规则？`)) return;
+  $.ajax({
+    url: API_BASE + "/api/alert-rules/bulk",
+    method: "POST",
+    contentType: "application/json",
+    data: JSON.stringify({ enabled: enabled ? 1 : 0 }),
+    success: function (res) {
+      loadRules();
+      alert(`已${label} ${res.affected} 条规则`);
+    },
+    error: function (xhr) {
+      alert((xhr.responseJSON && xhr.responseJSON.message) || "批量操作失败");
+    },
+  });
 }
 
 function openRuleModal(r) {
@@ -150,6 +202,7 @@ $(document).ready(function () {
   ruleModal = new bootstrap.Modal("#rule-modal");
   loadAlerts();
   loadRules();
+  loadTemplates();
   setInterval(loadAlerts, 15000);
 
   $(".alert-filter").on("click", function () {
@@ -161,6 +214,13 @@ $(document).ready(function () {
 
   $("#btn-add-rule").on("click", () => openRuleModal(null));
   $("#btn-save-rule").on("click", saveRule);
+  $("#btn-bulk-enable").on("click", () => bulkToggleRules(true));
+  $("#btn-bulk-disable").on("click", () => bulkToggleRules(false));
+  $("#tpl-select").on("change", function () {
+    const key = $(this).val();
+    $(this).val("");
+    if (key) applyTemplate(key);
+  });
 
   $(document).on("click", ".btn-handle", function () {
     handleAlert(parseInt($(this).data("id"), 10));

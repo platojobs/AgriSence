@@ -33,6 +33,7 @@ from database import (
     assign_device_group, get_group_stats,
     get_alerts, get_alert, insert_alert, handle_alert,
     get_alert_rules, upsert_alert_rule, delete_alert_rule,
+    record_rule_trigger, set_rules_enabled, get_rule_stats,
     get_schedules, insert_schedule, update_schedule, delete_schedule,
     get_overview_stats,
     get_actuators, get_actuator, update_actuator, upsert_actuator,
@@ -218,6 +219,11 @@ def evaluate_rules():
         cond_text = "低于" if rule["condition"] in ("lt", "<") else "高于"
         message = f"{metric} {cond_text} 阈值 {rule['threshold']}（当前值 {value}）"
         insert_alert(metric, rule.get("level", "warning"), message, device_id)
+        # 规则命中统计：累计次数 + 最近触发时间
+        try:
+            record_rule_trigger(rule["id"])
+        except Exception as e:
+            print("rule stat error:", e)
         _recent_alerts[key] = now
         # 同步生成站内通知，广播给管理员与操作员
         try:
@@ -1453,6 +1459,97 @@ def api_alert_rule_delete(rule_id):
     delete_alert_rule(rule_id)
     _audit("alert_rule_delete", target="rule#%d" % rule_id, detail="删除告警规则")
     return jsonify({"status": "ok"})
+
+
+# 常用规则模板：一键套用，避免逐条手工录入
+RULE_TEMPLATES = {
+    "greenhouse": {
+        "name": "温室大棚标准组",
+        "desc": "墒情下限、高温、高湿、弱光四条基础阈值",
+        "rules": [
+            {"metric": "soil_moisture", "condition": "lt", "threshold": 35, "level": "warning"},
+            {"metric": "temperature", "condition": "gt", "threshold": 32, "level": "warning"},
+            {"metric": "humidity", "condition": "gt", "threshold": 85, "level": "info"},
+            {"metric": "light", "condition": "lt", "threshold": 5000, "level": "info"},
+        ],
+    },
+    "drought": {
+        "name": "干旱应急组",
+        "desc": "墒情偏低的严重告警 + 高温叠加警告",
+        "rules": [
+            {"metric": "soil_moisture", "condition": "lt", "threshold": 25, "level": "critical"},
+            {"metric": "temperature", "condition": "gt", "threshold": 35, "level": "warning"},
+        ],
+    },
+    "seedling": {
+        "name": "育苗环境组",
+        "desc": "育苗期对温湿度与光照较为敏感",
+        "rules": [
+            {"metric": "temperature", "condition": "lt", "threshold": 15, "level": "warning"},
+            {"metric": "temperature", "condition": "gt", "threshold": 28, "level": "warning"},
+            {"metric": "humidity", "condition": "lt", "threshold": 50, "level": "info"},
+        ],
+    },
+}
+
+
+@app.route("/api/alert-rules/stats", methods=["GET"])
+def api_alert_rule_stats():
+    """规则统计：总数 / 启用 / 停用 / 累计命中。"""
+    return jsonify(get_rule_stats())
+
+
+@app.route("/api/alert-rules/templates", methods=["GET"])
+def api_alert_rule_templates():
+    """规则模板列表（含各模板规则条数）。"""
+    data = [
+        {"key": k, "name": v["name"], "desc": v["desc"], "count": len(v["rules"])}
+        for k, v in RULE_TEMPLATES.items()
+    ]
+    return jsonify(data)
+
+
+@app.route("/api/alert-rules/templates/apply", methods=["POST"])
+@require_role("operator")
+def api_alert_rule_templates_apply():
+    """套用模板批量建规则。body: {"key": "greenhouse"}；已存在的同规则跳过。"""
+    data = request.get_json(silent=True) or request.form
+    key = data.get("key")
+    tpl = RULE_TEMPLATES.get(key)
+    if not tpl:
+        return jsonify({"status": "error", "message": "模板不存在"}), 404
+    existing = {(r["metric"], r["condition"], float(r["threshold"]))
+                for r in get_alert_rules()}
+    created = skipped = 0
+    for rule in tpl["rules"]:
+        sig = (rule["metric"], rule["condition"], float(rule["threshold"]))
+        if sig in existing:
+            skipped += 1
+            continue
+        upsert_alert_rule(rule["metric"], rule["condition"], rule["threshold"],
+                          rule["level"], 1)
+        created += 1
+    _audit("alert_rule_template", target=key,
+           detail="套用模板「%s」：新增 %d 条，跳过 %d 条" % (tpl["name"], created, skipped))
+    return jsonify({"status": "ok", "created": created, "skipped": skipped})
+
+
+@app.route("/api/alert-rules/bulk", methods=["POST"])
+@require_role("operator")
+def api_alert_rule_bulk():
+    """批量启用/停用规则。body: {"enabled": 1|0, "ids": [1,2] 可选（缺省全部）}"""
+    data = request.get_json(silent=True) or request.form
+    try:
+        enabled = int(data.get("enabled", 1))
+        ids = data.get("ids")
+        if ids is not None:
+            ids = [int(i) for i in ids]
+        affected = set_rules_enabled(enabled, ids)
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "参数错误"}), 400
+    _audit("alert_rule_bulk", target="rules",
+           detail="批量%s %d 条规则" % ("启用" if enabled else "停用", affected))
+    return jsonify({"status": "ok", "affected": affected})
 
 
 # ---------------------------------------------------------------------------

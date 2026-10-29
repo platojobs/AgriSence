@@ -64,11 +64,24 @@
 
     <!-- 告警规则 -->
     <div class="sensor-card">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h6 class="mb-0"><i class="bi bi-shield-check"></i> 告警规则</h6>
-        <button class="btn btn-success btn-sm" id="btn-add-rule">
-          <i class="bi bi-plus-lg"></i> 新增规则
-        </button>
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <h6 class="mb-0"><i class="bi bi-shield-check"></i> 告警规则
+          <small class="text-muted fw-normal ms-2" id="rule-stats"></small>
+        </h6>
+        <div class="d-flex flex-wrap gap-2">
+          <select class="form-select form-select-sm" id="tpl-select" style="width: 180px">
+            <option value="">套用规则模板...</option>
+          </select>
+          <button class="btn btn-outline-success btn-sm" id="btn-bulk-enable">
+            <i class="bi bi-toggle-on"></i> 全部启用
+          </button>
+          <button class="btn btn-outline-secondary btn-sm" id="btn-bulk-disable">
+            <i class="bi bi-toggle-off"></i> 全部停用
+          </button>
+          <button class="btn btn-success btn-sm" id="btn-add-rule">
+            <i class="bi bi-plus-lg"></i> 新增规则
+          </button>
+        </div>
       </div>
       <div class="table-responsive">
         <table class="table table-sm table-hover align-middle mb-0">
@@ -79,11 +92,13 @@
               <th>阈值</th>
               <th>级别</th>
               <th>启用</th>
+              <th>命中次数</th>
+              <th>最近触发</th>
               <th class="text-end">操作</th>
             </tr>
           </thead>
           <tbody id="rules-table">
-            <tr><td colspan="6" class="text-center text-muted py-3">加载中...</td></tr>
+            <tr><td colspan="8" class="text-center text-muted py-3">加载中...</td></tr>
           </tbody>
         </table>
       </div>
