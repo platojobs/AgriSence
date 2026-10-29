@@ -109,6 +109,38 @@ function loadRuleStats() {
 function loadRules() {
   $.get(API_BASE + "/api/alert-rules", renderRules);
   loadRuleStats();
+  loadTrend();
+}
+
+// ---------- 规则命中趋势 ----------
+let trendChart = null;
+
+function loadTrend() {
+  const days = parseInt($("#trend-days").val(), 10) || 7;
+  $.get(API_BASE + "/api/alert-rules/trend", { days: days }, function (d) {
+    const series = d.series || [];
+    $("#trend-total").text(d.total > 0
+      ? `近 ${days} 天累计命中 ${d.total} 次`
+      : `近 ${days} 天暂无命中记录`);
+    const colors = { info: "#2196f3", warning: "#ff9800", critical: "#f44336" };
+    if (!trendChart) trendChart = echarts.init(document.getElementById("rule-trend"));
+    trendChart.setOption({
+      tooltip: { trigger: "axis" },
+      legend: { bottom: 0, type: "scroll", textStyle: { fontSize: 11 } },
+      grid: { left: 40, right: 16, top: 16, bottom: 52 },
+      xAxis: { type: "category", data: d.labels || [] },
+      yAxis: { type: "value", minInterval: 1 },
+      series: series.map((s) => ({
+        name: `${METRIC_LABELS[s.metric] || s.metric} #${s.rule_id}`,
+        type: "bar",
+        stack: "total",
+        barMaxWidth: 18,
+        itemStyle: { color: colors[s.level] || "#4caf50" },
+        data: s.data,
+      })),
+    }, true);
+    trendChart.resize();
+  });
 }
 
 function loadTemplates() {
@@ -221,6 +253,8 @@ $(document).ready(function () {
     $(this).val("");
     if (key) applyTemplate(key);
   });
+  $("#trend-days").on("change", loadTrend);
+  $(window).on("resize", function () { if (trendChart) trendChart.resize(); });
 
   $(document).on("click", ".btn-handle", function () {
     handleAlert(parseInt($(this).data("id"), 10));

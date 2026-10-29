@@ -8,6 +8,7 @@ AgriSense 数据库操作层
 import os
 import sqlite3
 import time
+import datetime
 
 from config import DATABASE_PATH
 
@@ -80,6 +81,17 @@ def init_db():
                 threshold REAL,
                 level TEXT DEFAULT 'warning',
                 enabled INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # 告警规则命中明细表：用于规则命中趋势图表
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS rule_hits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                rule_id INTEGER,
+                metric TEXT,
+                level TEXT DEFAULT 'warning',
+                device_id TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -669,14 +681,48 @@ def delete_alert_rule(rule_id):
         conn.commit()
 
 
-def record_rule_trigger(rule_id):
-    """规则命中计数 +1，并记录最近触发时间。"""
+def record_rule_trigger(rule_id, metric=None, level=None, device_id=None):
+    """规则命中计数 +1、更新最近触发时间，并写入命中明细。"""
     with _get_conn() as conn:
         conn.execute(
             "UPDATE alert_rules SET trigger_count = COALESCE(trigger_count, 0) + 1, "
             "last_triggered_at = CURRENT_TIMESTAMP WHERE id = ?", (rule_id,)
         )
+        conn.execute(
+            "INSERT INTO rule_hits (rule_id, metric, level, device_id) VALUES (?, ?, ?, ?)",
+            (rule_id, metric, level or "warning", device_id),
+        )
         conn.commit()
+
+
+def get_rule_trend(days=7):
+    """最近 N 天规则命中趋势：按天 × 规则聚合，返回 labels / series / total。"""
+    days = max(1, min(30, int(days)))
+    with _get_conn() as conn:
+        rows = conn.execute(
+            "SELECT date(created_at) AS d, rule_id, metric, level, COUNT(*) AS c "
+            "FROM rule_hits WHERE date(created_at) >= date('now', ?) "
+            "GROUP BY d, rule_id, metric, level",
+            ("-%d days" % (days - 1),),
+        ).fetchall()
+    today = datetime.date.today()
+    labels = [(today - datetime.timedelta(days=days - 1 - i)).isoformat()
+              for i in range(days)]
+    grouped = {}
+    for r in rows:
+        key = (r["rule_id"], r["metric"] or "unknown", r["level"] or "warning")
+        g = grouped.setdefault(key, {"rule_id": r["rule_id"], "metric": r["metric"],
+                                     "level": r["level"], "counts": {}})
+        g["counts"][r["d"]] = r["c"]
+    series = [{
+        "rule_id": g["rule_id"],
+        "metric": g["metric"],
+        "level": g["level"],
+        "data": [g["counts"].get(d, 0) for d in labels],
+    } for g in grouped.values()]
+    series.sort(key=lambda s: sum(s["data"]), reverse=True)
+    return {"labels": labels, "series": series,
+            "total": sum(sum(s["data"]) for s in series)}
 
 
 def set_rules_enabled(enabled, rule_ids=None):

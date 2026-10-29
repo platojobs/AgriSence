@@ -35,7 +35,7 @@ from database import (
     assign_device_group, get_group_stats,
     get_alerts, get_alert, insert_alert, handle_alert,
     get_alert_rules, upsert_alert_rule, delete_alert_rule,
-    record_rule_trigger, set_rules_enabled, get_rule_stats,
+    record_rule_trigger, set_rules_enabled, get_rule_stats, get_rule_trend,
     get_schedules, insert_schedule, update_schedule, delete_schedule,
     get_overview_stats,
     get_actuators, get_actuator, update_actuator, upsert_actuator,
@@ -223,7 +223,7 @@ def evaluate_rules():
         insert_alert(metric, rule.get("level", "warning"), message, device_id)
         # 规则命中统计：累计次数 + 最近触发时间
         try:
-            record_rule_trigger(rule["id"])
+            record_rule_trigger(rule["id"], metric, rule.get("level", "warning"), device_id)
         except Exception as e:
             print("rule stat error:", e)
         _recent_alerts[key] = now
@@ -1531,6 +1531,18 @@ RULE_TEMPLATES = {
 def api_alert_rule_stats():
     """规则统计：总数 / 启用 / 停用 / 累计命中。"""
     return jsonify(get_rule_stats())
+
+
+@app.route("/api/alert-rules/trend", methods=["GET"])
+def api_alert_rule_trend():
+    """规则命中趋势：query days（1-30，默认 7）。"""
+    try:
+        days = int(request.args.get("days", 7))
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "参数错误"}), 400
+    if not 1 <= days <= 30:
+        return jsonify({"status": "error", "message": "天数需在 1-30 之间"}), 400
+    return jsonify({"status": "ok", **get_rule_trend(days)})
 
 
 @app.route("/api/alert-rules/templates", methods=["GET"])
