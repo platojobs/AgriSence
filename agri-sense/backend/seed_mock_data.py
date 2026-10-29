@@ -285,47 +285,179 @@ def seed_site_contents():
 </div>
 """),
         ("faq", "问题解答",
-         """<h6 style="color:#2e7d32;font-weight:700;margin-top:20px;"><i class="bi bi-box-seam"></i> 产品与功能</h6>
-<p style="line-height:1.8;color:#555;"><strong>Q1：AgriSense 系统包含哪些核心功能？</strong><br>
-系统提供环境监测（土壤墒情、温湿度、光照）、智能灌溉控制、规则引擎自动告警、执行器远程控制、农产品溯源、AI 病害识别、数据大屏可视化、移动端管理等完整功能，覆盖「感知-决策-控制-溯源」全链路。</p>
-<p style="line-height:1.8;color:#555;"><strong>Q2：系统支持哪些作物和种植场景？</strong><br>
-系统与作物种类无关，适用于设施大棚蔬菜、水果（番茄、黄瓜、草莓等）、大田作物及茶园、果园等场景。灌溉阈值、告警规则均可按作物自定义配置。</p>
-<h6 style="color:#2e7d32;font-weight:700;margin-top:20px;"><i class="bi bi-cpu"></i> 设备安装与组网</h6>
-<p style="line-height:1.8;color:#555;"><strong>Q3：大棚里没有 WiFi 信号怎么办？</strong><br>
-提供三种方案：①棚区部署无线 AP 扩展 WiFi 覆盖；②采用 4G 网关直接回传数据；③远距离大田场景使用 LoRa 组网，单网关覆盖 3-5 公里。</p>
-<h6 style="color:#2e7d32;font-weight:700;margin-top:20px;"><i class="bi bi-database"></i> 数据与服务</h6>
-<p style="line-height:1.8;color:#555;"><strong>Q4：监测数据保存在哪里？会丢失吗？</strong><br>
-数据默认保存在本地 SQLite 数据库，数据完全归您所有。建议定期备份数据库文件；规模化部署可升级为 MySQL/InfluxDB 并配置自动备份策略。</p>"""),
+         """
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="sensor-card">
+      <h6 class="mb-3"><i class="bi bi-question-circle"></i> 常见问题解答</h6>
+
+      <div class="faq-cat"><i class="bi bi-box-seam"></i> 产品与功能</div>
+      <div class="accordion" id="faq1">
+        <div class="accordion-item">
+          <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#q1">AgriSense 系统包含哪些核心功能？</button></h2>
+          <div id="q1" class="accordion-collapse collapse show" data-bs-parent="#faq1"><div class="accordion-body">系统提供环境监测（土壤墒情、温湿度、光照）、智能灌溉控制、规则引擎自动告警、执行器远程控制、农产品溯源、AI 病害识别、数据大屏可视化、移动端管理等完整功能，覆盖「感知-决策-控制-溯源」全链路。</div></div>
+        </div>
+        <div class="accordion-item">
+          <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q2">系统支持哪些作物和种植场景？</button></h2>
+          <div id="q2" class="accordion-collapse collapse" data-bs-parent="#faq1"><div class="accordion-body">系统与作物种类无关，适用于设施大棚蔬菜、水果（番茄、黄瓜、草莓等）、大田作物及茶园、果园等场景。灌溉阈值、告警规则均可按作物自定义配置。</div></div>
+        </div>
+        <div class="accordion-item">
+          <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q3">病害识别的准确率如何？可以离线使用吗？</button></h2>
+          <div id="q3" class="accordion-collapse collapse" data-bs-parent="#faq1"><div class="accordion-body">当前版本的病害识别为演示功能，基于内置病害知识库返回结果。生产环境可接入训练好的图像分类模型，常见病害识别准确率可达 90% 以上；模型经轻量化处理后支持移动端离线推理。AI 结果仅供参考，实际防治请咨询农技专家。</div></div>
+        </div>
+      </div>
+
+      <div class="faq-cat"><i class="bi bi-cpu"></i> 设备安装与组网</div>
+      <div class="accordion" id="faq2">
+        <div class="accordion-item">
+          <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q4">传感器节点如何供电？续航多久？</button></h2>
+          <div id="q4" class="accordion-collapse collapse" data-bs-parent="#faq2"><div class="accordion-body">棚内节点建议 220V 市电+适配器供电；无电源场景可选太阳能+锂电池方案。大田 LoRa 节点采用低功耗设计，一节电池可续航 2-3 年。</div></div>
+        </div>
+        <div class="accordion-item">
+          <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q5">大棚里没有 WiFi 信号怎么办？</button></h2>
+          <div id="q5" class="accordion-collapse collapse" data-bs-parent="#faq2"><div class="accordion-body">提供三种方案：①棚区部署无线 AP 扩展 WiFi 覆盖；②采用 4G 网关直接回传数据；③远距离大田场景使用 LoRa 组网，单网关覆盖 3-5 公里。设备安装前我们会进行现场勘测并给出组网建议。</div></div>
+        </div>
+        <div class="accordion-item">
+          <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q6">土壤传感器应该埋多深？多久校准一次？</button></h2>
+          <div id="q6" class="accordion-collapse collapse" data-bs-parent="#faq2"><div class="accordion-body">传感器应埋设在主要根系层，蔬菜建议 20-30cm 深度。电容式土壤传感器基本免校准，建议每季度检查探头接触是否良好、有无腐蚀，每年用烘干法比对一次数据确保精度。</div></div>
+        </div>
+        <div class="accordion-item">
+          <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q7">设备显示离线，如何排查？</button></h2>
+          <div id="q7" class="accordion-collapse collapse" data-bs-parent="#faq2"><div class="accordion-body">按顺序排查：①检查设备供电是否正常；②检查 WiFi/网络连接（设备指示灯状态）；③确认 MQTT 服务（Mosquitto）是否运行；④查看后端日志是否收到数据。仍无法解决可联系客服远程协助。</div></div>
+        </div>
+      </div>
+
+      <div class="faq-cat"><i class="bi bi-database"></i> 数据与服务</div>
+      <div class="accordion" id="faq3">
+        <div class="accordion-item">
+          <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q8">监测数据保存在哪里？会丢失吗？</button></h2>
+          <div id="q8" class="accordion-collapse collapse" data-bs-parent="#faq3"><div class="accordion-body">数据默认保存在本地 SQLite 数据库，数据完全归您所有。建议定期备份数据库文件；规模化部署可升级为 MySQL/InfluxDB 并配置自动备份策略。</div></div>
+        </div>
+        <div class="accordion-item">
+          <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q9">历史数据可以导出吗？</button></h2>
+          <div id="q9" class="accordion-collapse collapse" data-bs-parent="#faq3"><div class="accordion-body">可以。「历史分析」页面支持按时间范围查询并一键导出 CSV 文件，可直接用 Excel 打开进行进一步分析。</div></div>
+        </div>
+        <div class="accordion-item">
+          <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q10">多个大棚可以统一管理吗？</button></h2>
+          <div id="q10" class="accordion-collapse collapse" data-bs-parent="#faq3"><div class="accordion-body">可以。系统支持多设备接入，每个大棚部署独立监测节点，在「设备管理」中统一查看状态，数据大屏可按地块/棚区展示所有监测点状态。</div></div>
+        </div>
+      </div>
+
+      <div class="faq-cat"><i class="bi bi-headset"></i> 售后保障</div>
+      <div class="accordion" id="faq4">
+        <div class="accordion-item">
+          <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q11">设备质保政策是怎样的？</button></h2>
+          <div id="q11" class="accordion-collapse collapse" data-bs-parent="#faq4"><div class="accordion-body">监测终端自签收之日起一年质保，非人为损坏免费维修或更换；人为损坏（如进水、摔坏）提供成本价维修。质保期外提供终身有偿维护服务。</div></div>
+        </div>
+        <div class="accordion-item">
+          <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#q12">如何获得使用培训？</button></h2>
+          <div id="q12" class="accordion-collapse collapse" data-bs-parent="#faq4"><div class="accordion-body">我们提供三种培训方式：①新用户远程视频指导（约 1 小时）；②每月线上公开课；③规模化基地客户可申请上门培训。详情请前往客服中心预约。</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 侧边 -->
+  <div class="col-lg-4">
+    <div class="sensor-card mb-3">
+      <h6 class="mb-3"><i class="bi bi-search"></i> 没找到答案？</h6>
+      <p class="small text-muted">您可以通过以下方式获取进一步帮助：</p>
+      <div class="d-grid gap-2">
+        <a href="service.html" class="btn btn-success btn-sm"><i class="bi bi-headset"></i> 联系在线客服</a>
+        <a href="knowledge.html" class="btn btn-outline-success btn-sm"><i class="bi bi-book"></i> 浏览农业知识库</a>
+      </div>
+    </div>
+    <div class="sensor-card">
+      <h6 class="mb-3"><i class="bi bi-telephone"></i> 快速联系</h6>
+      <div class="small">
+        <div class="mb-2"><i class="bi bi-telephone-fill text-success me-2"></i>400-800-2010</div>
+        <div class="mb-2"><i class="bi bi-envelope-fill text-success me-2"></i>support@agrisense.cn</div>
+        <div><i class="bi bi-clock-fill text-success me-2"></i>工作日 8:30 - 18:00</div>
+      </div>
+    </div>
+  </div>
+</div>
+"""),
         ("privacy", "隐私政策与用户服务协议",
-         """<h6 style="color:#1b5e20;font-weight:700;margin-top:22px;">一、总则</h6>
-<p style="line-height:1.9;color:#555;">欢迎使用 AgriSense 智慧农业监测系统（以下简称「本系统」）。本隐私政策旨在说明我们在您使用本系统及相关服务时如何收集、使用、存储和保护您的信息。请您在使用本系统前仔细阅读并充分理解本政策的全部内容。</p>
-<h6 style="color:#1b5e20;font-weight:700;margin-top:22px;">二、我们收集的信息</h6>
-<ul style="line-height:1.9;color:#555;font-size:13.5px;">
-  <li><strong>账户信息：</strong>您注册或使用系统时提供的姓名、联系方式等；</li>
-  <li><strong>设备与生产数据：</strong>传感器采集的土壤墒情、温湿度、光照等环境监测数据，以及灌溉、农事操作等生产记录；</li>
-  <li><strong>使用日志：</strong>系统运行日志、设备连接状态、操作记录等技术信息；</li>
-  <li><strong>上传内容：</strong>您主动上传的作物图片（用于病害识别）、留言反馈内容等。</li>
-</ul>
-<h6 style="color:#1b5e20;font-weight:700;margin-top:22px;">三、信息的存储与保护</h6>
-<p style="line-height:1.9;color:#555;">您的数据默认存储于您本地部署的服务器中，数据所有权完全归您所有。我们采取 PBKDF2 加盐哈希、HTTPS 传输、会话令牌鉴权等多重措施保障数据安全。</p>"""),
+         """
+<div class="sensor-card policy-body">
+  <h5 class="fw-bold mb-1">隐私政策与用户服务协议</h5>
+  <p class="text-muted small">更新日期：2010年8月 · 生效日期：2010年8月</p>
+
+  <h6 id="s1">一、总则</h6>
+  <p>欢迎使用 AgriSense 智慧农业监测系统（以下简称「本系统」）。本隐私政策旨在说明我们在您使用本系统及相关服务时如何收集、使用、存储和保护您的信息。请您在使用本系统前仔细阅读并充分理解本政策的全部内容。一旦您使用本系统，即表示您已同意本政策的约定。</p>
+
+  <h6 id="s2">二、我们收集的信息</h6>
+  <p>为向您提供智慧农业服务，我们可能收集以下信息：</p>
+  <ul>
+    <li><strong>账户信息：</strong>您注册或使用系统时提供的姓名、联系方式等；</li>
+    <li><strong>设备与生产数据：</strong>您部署的传感器采集的土壤墒情、温湿度、光照等环境监测数据，以及灌溉、农事操作等生产记录；</li>
+    <li><strong>使用日志：</strong>系统运行日志、设备连接状态、操作记录等技术信息；</li>
+    <li><strong>上传内容：</strong>您主动上传的作物图片（用于病害识别）、留言反馈内容等。</li>
+  </ul>
+
+  <h6 id="s3">三、信息的使用</h6>
+  <p>我们仅在以下目的范围内使用收集的信息：</p>
+  <ul>
+    <li>提供环境监测、智能灌溉、告警推送等核心服务；</li>
+    <li>生成生产分析报表与农产品溯源记录；</li>
+    <li>改进产品功能、优化算法模型（数据经匿名化处理）；</li>
+    <li>响应您的客服请求与售后支持。</li>
+  </ul>
+  <p>我们不会将您的生产数据用于任何与您无关的商业用途。</p>
+
+  <h6 id="s4">四、信息的存储与保护</h6>
+  <p>您的数据默认存储于您本地部署的服务器中，数据所有权完全归您所有。我们采取以下措施保障数据安全：</p>
+  <ul>
+    <li>传输过程采用加密通道，防止数据被窃取或篡改；</li>
+    <li>严格的访问权限控制，仅授权人员可接触系统运维数据；</li>
+    <li>建议并协助您建立定期备份机制，防止数据意外丢失。</li>
+  </ul>
+
+  <h6 id="s5">五、信息的共享与披露</h6>
+  <p>我们不会向任何第三方出售您的个人信息与生产数据。仅在以下情形下可能共享或披露：</p>
+  <ul>
+    <li>获得您的明确授权同意；</li>
+    <li>根据法律法规、司法机关或行政机关的强制性要求；</li>
+    <li>农产品溯源场景中，您主动选择向消费者公开的生产过程信息。</li>
+  </ul>
+
+  <h6 id="s6">六、您的权利</h6>
+  <p>您对自己的数据享有以下权利：</p>
+  <ul>
+    <li><strong>访问与导出：</strong>可随时通过系统查询并导出历史数据（CSV 格式）；</li>
+    <li><strong>更正：</strong>可更正账户信息与生产记录；</li>
+    <li><strong>删除：</strong>可删除农事日志、反馈留言等个人提交的内容；</li>
+    <li><strong>注销：</strong>可联系我们停止使用服务并删除相关数据。</li>
+  </ul>
+
+  <h6 id="s7">七、未成年人保护</h6>
+  <p>本系统面向农业生产经营者提供服务，不面向未成年人。我们不会有意收集未成年人的个人信息。如发现误收集，将立即删除相关数据。</p>
+
+  <h6 id="s8">八、政策更新</h6>
+  <p>随着产品功能的发展，本政策可能适时更新。更新后的政策将在本页面公布，重大变更将通过系统内通知的方式提示您。建议您定期查阅本页面以了解最新政策。</p>
+
+  <h6 id="s9">九、联系我们</h6>
+  <p>如您对本政策或个人信息保护有任何疑问、意见或建议，可通过以下方式与我们联系：</p>
+  <ul>
+    <li>客服热线：400-800-2010</li>
+    <li>联系邮箱：privacy@agrisense.cn</li>
+    <li>在线留言：前往「客服中心」提交您的问题</li>
+  </ul>
+  <p>我们将在收到您的请求后 15 个工作日内予以回复。</p>
+</div>
+"""),
         ("service", "客服中心",
-         """<p style="line-height:1.9;color:#555;">
-我们提供<strong>7×24 小时</strong>的技术支持与售后服务。遇到任何问题，可通过以下方式联系我们：
-</p>
-<ul style="line-height:1.9;color:#555;font-size:13.5px;">
-  <li><strong>服务热线：</strong>400-800-2010</li>
-  <li><strong>官方微信：</strong>AgriSense2010</li>
-  <li><strong>技术支持邮箱：</strong>support@agrisense.cn</li>
-  <li><strong>人工客服时间：</strong>工作日 8:30 - 18:00</li>
-</ul>
-<h6 style="font-weight:700;color:#2e7d32;margin-top:18px;">服务承诺</h6>
-<ul style="line-height:1.9;color:#555;font-size:13.5px;">
-  <li><i class="bi bi-check-circle text-success me-1"></i> 工作日 2 小时内响应您的问题</li>
-  <li><i class="bi bi-check-circle text-success me-1"></i> 设备故障上门维修，24-48 小时内到达</li>
-  <li><i class="bi bi-check-circle text-success me-1"></i> 产品一年内免费质保，终身成本价维护</li>
-  <li><i class="bi bi-check-circle text-success me-1"></i> 提供设备安装、数据迁移、使用培训一体化服务</li>
-</ul>
-<p style="font-size:12px;color:#999;margin-top:14px;">提示：您也可以使用左侧「在线留言」功能，客服将在 1 个工作日内与您联系。</p>"""),
+         """
+<div class="sensor-card h-100">
+  <h6 class="mb-2"><i class="bi bi-shield-check"></i> 服务承诺</h6>
+  <div class="promise-item"><i class="bi bi-lightning-charge"></i><div><div class="t">2 小时快速响应</div><div class="d">工作时间内提交的故障报修，2 小时内响应并给出处理方案</div></div></div>
+  <div class="promise-item"><i class="bi bi-tools"></i><div><div class="t">免费上门调试</div><div class="d">新装设备提供首次免费上门安装与调试服务</div></div></div>
+  <div class="promise-item"><i class="bi bi-arrow-repeat"></i><div><div class="t">一年质保换新</div><div class="d">监测终端一年内非人为损坏免费维修或更换</div></div></div>
+  <div class="promise-item"><i class="bi bi-mortarboard"></i><div><div class="t">免费技术培训</div><div class="d">定期举办线上培训，帮助用户掌握系统全部功能</div></div></div>
+  <div class="promise-item"><i class="bi bi-headset"></i><div><div class="t">专属客户成功经理</div><div class="d">规模化基地客户配备一对一客户成功经理全程跟进</div></div></div>
+</div>
+"""),
         ("contact", "联系方式",
          """<p style="line-height:1.9;color:#555;">AgriSense 智慧农业科技有限公司<br>总部地址：智慧农业产业园 A3 栋<br>服务热线：400-800-2010<br>商务合作：contact@agrisense.cn</p>"""),
         ("terms", "服务条款",
