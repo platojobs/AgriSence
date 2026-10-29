@@ -459,11 +459,78 @@ def seed_site_contents():
 </div>
 """),
         ("contact", "联系方式",
-         """<p style="line-height:1.9;color:#555;">AgriSense 智慧农业科技有限公司<br>总部地址：智慧农业产业园 A3 栋<br>服务热线：400-800-2010<br>商务合作：contact@agrisense.cn</p>"""),
+         """
+<div class="cs-hero">
+  <h4><i class="bi bi-geo-alt-fill"></i> 欢迎联系 AgriSense</h4>
+  <p>我们随时准备为您提供智慧农业相关的咨询、方案设计与技术支持。请通过以下方式联系我们。</p>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-6 col-lg-3">
+    <div class="cs-card"><div class="ico"><i class="bi bi-geo-alt-fill"></i></div><div><div class="t">总部地址</div><div class="v">智慧农业产业园 A3 栋<br/>上海市浦东新区科苑路 88 号</div></div></div>
+  </div>
+  <div class="col-md-6 col-lg-3">
+    <div class="cs-card"><div class="ico"><i class="bi bi-telephone-fill"></i></div><div><div class="t">服务热线</div><div class="v">400-800-2010<br/>工作日 8:30 - 18:00</div></div></div>
+  </div>
+  <div class="col-md-6 col-lg-3">
+    <div class="cs-card"><div class="ico"><i class="bi bi-envelope-fill"></i></div><div><div class="t">邮件联系</div><div class="v">技术支持 support@agrisense.cn<br/>商务合作 contact@agrisense.cn</div></div></div>
+  </div>
+  <div class="col-md-6 col-lg-3">
+    <div class="cs-card"><div class="ico"><i class="bi bi-wechat"></i></div><div><div class="t">官方微信</div><div class="v">公众号：AgriSense2010<br/>微信扫描下方二维码关注</div></div></div>
+  </div>
+</div>
+"""),
         ("terms", "服务条款",
-         """<p style="line-height:1.9;color:#555;">请您在使用 AgriSense 服务前仔细阅读本条款。使用本系统即表示您同意本条款约定的全部内容。</p>
-<h6 style="font-weight:700;color:#1b5e20;margin-top:18px;">一、服务说明</h6>
-<p style="line-height:1.9;color:#555;">本系统提供智慧农业监测、智能灌溉、告警推送、溯源管理等功能，具体以产品实际交付为准。</p>"""),
+         """
+<div class="sensor-card policy-body">
+  <h5 class="fw-bold mb-1">AgriSense 服务条款</h5>
+  <p class="text-muted small">更新日期：2010年8月 · 生效日期：2010年8月</p>
+
+  <h6 id="t1">一、服务说明</h6>
+  <p>AgriSense 智慧农业科技有限公司（以下简称「我们」）提供的智慧农业监测系统（以下简称「本系统」）包括但不限于环境监测、智能灌溉、告警推送、溯源管理、病害识别等功能模块。本系统的具体功能与服务内容以产品实际交付为准，我们保留随时调整的权利。</p>
+
+  <h6 id="t2">二、账号注册与使用</h6>
+  <p>您在使用本系统前需注册账号，注册时应提供真实、准确的信息。您应妥善保管账号与密码，因您保管不当造成的损失由您自行承担。您的账号仅限本人使用，不得转借、出租或出售给第三方。</p>
+
+  <h6 id="t3">三、使用规范</h6>
+  <p>您在使用本系统时应遵守以下规范：</p>
+  <ul>
+    <li>不得利用本系统从事任何违反法律法规的活动；</li>
+    <li>不得对本系统进行反编译、逆向工程或恶意攻击；</li>
+    <li>不得干扰或破坏其他用户的正常使用；</li>
+    <li>应妥善保管您部署的硬件设备，定期维护确保数据采集质量。</li>
+  </ul>
+
+  <h6 id="t4">四、知识产权</h6>
+  <p>本系统的全部知识产权（包括但不限于软件、界面设计、算法、文档）归我们所有，受相关法律法规保护。未经我们书面授权，您不得以任何形式复制、传播、修改或用于商业用途。</p>
+
+  <h6 id="t5">五、免责声明</h6>
+  <p>在法律允许的范围内，我们对以下情况不承担责任：</p>
+  <ul>
+    <li>因不可抗力（包括但不限于自然灾害、电力中断、网络故障）造成的服务中断或数据损失；</li>
+    <li>AI 病害识别等智能分析功能的结果仅供参考，实际防治请咨询农技专家；</li>
+    <li>因您未及时维护硬件设备或操作不当导致的数据不准确。</li>
+  </ul>
+
+  <h6 id="t6">六、服务变更与中断</h6>
+  <p>我们有权根据业务发展需要对服务内容进行调整、升级或终止。对于重要变更，我们将通过系统内通知的方式提前告知。服务中断期间我们将尽力减少对用户的影响。</p>
+
+  <h6 id="t7">七、终止条款</h6>
+  <p>如您违反本服务条款的约定，我们有权单方面终止向您提供服务，并注销您的账号。您也可主动申请终止使用，终止后您的数据将按约定进行处理。</p>
+
+  <h6 id="t8">八、适用法律</h6>
+  <p>本服务条款的订立、执行与解释均适用中华人民共和国法律。因本条款引起的争议，双方应友好协商解决；协商不成的，任何一方均有权向我们所在地有管辖权的人民法院提起诉讼。</p>
+
+  <h6 id="t9">九、联系我们</h6>
+  <p>如您对本服务条款有任何疑问或建议，可通过以下方式与我们联系：</p>
+  <ul>
+    <li>客服热线：400-800-2010</li>
+    <li>联系邮箱：legal@agrisense.cn</li>
+    <li>在线留言：前往「客服中心」提交您的问题</li>
+  </ul>
+  <p>我们将在收到您的请求后 15 个工作日内予以回复。</p>
+</div>
+"""),
     ]
     for key, title, content in defaults:
         upsert_site_content(key, title, content)

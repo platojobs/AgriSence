@@ -25,8 +25,10 @@ const NAV_ITEMS = [
   { section: "支持" },
   { key: "about", label: "关于我们", icon: "bi-info-circle", href: "about.html" },
   { key: "service", label: "客服中心", icon: "bi-headset", href: "service.html" },
+  { key: "contact", label: "联系方式", icon: "bi-geo-alt", href: "contact.html" },
   { key: "faq", label: "问题解答", icon: "bi-question-circle", href: "faq.html" },
   { key: "privacy", label: "隐私政策", icon: "bi-shield-lock", href: "privacy.html" },
+  { key: "terms", label: "服务条款", icon: "bi-file-earmark-text", href: "terms.html" },
 ];
 
 function buildSidebar(activeKey) {
@@ -114,8 +116,10 @@ function buildFooter() {
           <h6>支持与帮助</h6>
           <a href="about.html">关于我们</a>
           <a href="service.html">客服中心</a>
+          <a href="contact.html">联系方式</a>
           <a href="faq.html">问题解答</a>
-          <a href="privacy.html">隐私政策与协议</a>
+          <a href="privacy.html">隐私政策</a>
+          <a href="terms.html">服务条款</a>
         </div>
       </div>
       <div class="footer-bottom">
