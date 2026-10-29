@@ -21,7 +21,7 @@ from database import (
     init_db, insert_reading, insert_irrigation_log, get_history,
     upsert_device, insert_alert, upsert_alert_rule, insert_schedule,
     upsert_actuator, insert_farm_log, insert_batch,
-    insert_knowledge, insert_news,
+    insert_knowledge, insert_news, upsert_site_content,
     get_user_by_username, create_user,
 )
 
@@ -193,6 +193,9 @@ def seed():
     # ---- 演示账号 ----
     seed_users()
 
+    # ---- 站点内容默认值（about / faq / privacy / service）----
+    seed_site_contents()
+
 
 def seed_users():
     """播种演示账号（已存在则跳过），密码使用 PBKDF2 加盐哈希存储。"""
@@ -217,6 +220,73 @@ def seed_users():
         digest, salt = _hash(password)
         create_user(username, digest, salt, display_name, role)
         print("seed user:", username, "/", password, "(", role, ")")
+
+
+def seed_site_contents():
+    """播种站点默认内容（存在则覆盖为默认，便于 CMS 改前有基准）。"""
+    defaults = [
+        ("about", "关于我们",
+         """<h3 style="font-weight:700;color:#1b5e20;">让农业更智慧，让丰收更简单</h3>
+<p style="line-height:1.9;color:#555;">
+AgriSense 智慧农业科技有限公司成立于 2010 年，专注于农业物联网、农业大数据与人工智能技术的研发与应用。
+我们为设施农业、大田种植、畜牧养殖等场景提供「感知-决策-控制-溯源」全链路数字化解决方案，
+核心产品涵盖环境监测终端、智能灌溉控制系统、农产品质量追溯平台与 AI 病害识别服务，
+帮助种植主体降本增效、提质增收，推动农业生产方式向数字化、智能化转型。
+</p>
+<h6 style="font-weight:700;color:#2e7d32;margin-top:22px;">我们的使命</h6>
+<p style="line-height:1.9;color:#555;">让每一寸土地都有数据支撑，让每一次生产都有迹可循。以技术赋能农业，让种植更科学、管理更高效、产品更安全。</p>"""),
+        ("faq", "问题解答",
+         """<h6 style="color:#2e7d32;font-weight:700;margin-top:20px;"><i class="bi bi-box-seam"></i> 产品与功能</h6>
+<p style="line-height:1.8;color:#555;"><strong>Q1：AgriSense 系统包含哪些核心功能？</strong><br>
+系统提供环境监测（土壤墒情、温湿度、光照）、智能灌溉控制、规则引擎自动告警、执行器远程控制、农产品溯源、AI 病害识别、数据大屏可视化、移动端管理等完整功能，覆盖「感知-决策-控制-溯源」全链路。</p>
+<p style="line-height:1.8;color:#555;"><strong>Q2：系统支持哪些作物和种植场景？</strong><br>
+系统与作物种类无关，适用于设施大棚蔬菜、水果（番茄、黄瓜、草莓等）、大田作物及茶园、果园等场景。灌溉阈值、告警规则均可按作物自定义配置。</p>
+<h6 style="color:#2e7d32;font-weight:700;margin-top:20px;"><i class="bi bi-cpu"></i> 设备安装与组网</h6>
+<p style="line-height:1.8;color:#555;"><strong>Q3：大棚里没有 WiFi 信号怎么办？</strong><br>
+提供三种方案：①棚区部署无线 AP 扩展 WiFi 覆盖；②采用 4G 网关直接回传数据；③远距离大田场景使用 LoRa 组网，单网关覆盖 3-5 公里。</p>
+<h6 style="color:#2e7d32;font-weight:700;margin-top:20px;"><i class="bi bi-database"></i> 数据与服务</h6>
+<p style="line-height:1.8;color:#555;"><strong>Q4：监测数据保存在哪里？会丢失吗？</strong><br>
+数据默认保存在本地 SQLite 数据库，数据完全归您所有。建议定期备份数据库文件；规模化部署可升级为 MySQL/InfluxDB 并配置自动备份策略。</p>"""),
+        ("privacy", "隐私政策与用户服务协议",
+         """<h6 style="color:#1b5e20;font-weight:700;margin-top:22px;">一、总则</h6>
+<p style="line-height:1.9;color:#555;">欢迎使用 AgriSense 智慧农业监测系统（以下简称「本系统」）。本隐私政策旨在说明我们在您使用本系统及相关服务时如何收集、使用、存储和保护您的信息。请您在使用本系统前仔细阅读并充分理解本政策的全部内容。</p>
+<h6 style="color:#1b5e20;font-weight:700;margin-top:22px;">二、我们收集的信息</h6>
+<ul style="line-height:1.9;color:#555;font-size:13.5px;">
+  <li><strong>账户信息：</strong>您注册或使用系统时提供的姓名、联系方式等；</li>
+  <li><strong>设备与生产数据：</strong>传感器采集的土壤墒情、温湿度、光照等环境监测数据，以及灌溉、农事操作等生产记录；</li>
+  <li><strong>使用日志：</strong>系统运行日志、设备连接状态、操作记录等技术信息；</li>
+  <li><strong>上传内容：</strong>您主动上传的作物图片（用于病害识别）、留言反馈内容等。</li>
+</ul>
+<h6 style="color:#1b5e20;font-weight:700;margin-top:22px;">三、信息的存储与保护</h6>
+<p style="line-height:1.9;color:#555;">您的数据默认存储于您本地部署的服务器中，数据所有权完全归您所有。我们采取 PBKDF2 加盐哈希、HTTPS 传输、会话令牌鉴权等多重措施保障数据安全。</p>"""),
+        ("service", "客服中心",
+         """<p style="line-height:1.9;color:#555;">
+我们提供<strong>7×24 小时</strong>的技术支持与售后服务。遇到任何问题，可通过以下方式联系我们：
+</p>
+<ul style="line-height:1.9;color:#555;font-size:13.5px;">
+  <li><strong>服务热线：</strong>400-800-2010</li>
+  <li><strong>官方微信：</strong>AgriSense2010</li>
+  <li><strong>技术支持邮箱：</strong>support@agrisense.cn</li>
+  <li><strong>人工客服时间：</strong>工作日 8:30 - 18:00</li>
+</ul>
+<h6 style="font-weight:700;color:#2e7d32;margin-top:18px;">服务承诺</h6>
+<ul style="line-height:1.9;color:#555;font-size:13.5px;">
+  <li><i class="bi bi-check-circle text-success me-1"></i> 工作日 2 小时内响应您的问题</li>
+  <li><i class="bi bi-check-circle text-success me-1"></i> 设备故障上门维修，24-48 小时内到达</li>
+  <li><i class="bi bi-check-circle text-success me-1"></i> 产品一年内免费质保，终身成本价维护</li>
+  <li><i class="bi bi-check-circle text-success me-1"></i> 提供设备安装、数据迁移、使用培训一体化服务</li>
+</ul>
+<p style="font-size:12px;color:#999;margin-top:14px;">提示：您也可以使用左侧「在线留言」功能，客服将在 1 个工作日内与您联系。</p>"""),
+        ("contact", "联系方式",
+         """<p style="line-height:1.9;color:#555;">AgriSense 智慧农业科技有限公司<br>总部地址：智慧农业产业园 A3 栋<br>服务热线：400-800-2010<br>商务合作：contact@agrisense.cn</p>"""),
+        ("terms", "服务条款",
+         """<p style="line-height:1.9;color:#555;">请您在使用 AgriSense 服务前仔细阅读本条款。使用本系统即表示您同意本条款约定的全部内容。</p>
+<h6 style="font-weight:700;color:#1b5e20;margin-top:18px;">一、服务说明</h6>
+<p style="line-height:1.9;color:#555;">本系统提供智慧农业监测、智能灌溉、告警推送、溯源管理等功能，具体以产品实际交付为准。</p>"""),
+    ]
+    for key, title, content in defaults:
+        upsert_site_content(key, title, content)
+    print("seed site contents:", len(defaults), "entries")
 
 
 if __name__ == "__main__":
