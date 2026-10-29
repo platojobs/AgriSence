@@ -1426,6 +1426,38 @@ def api_alert_handle(alert_id):
     return jsonify({"status": "ok"})
 
 
+# ---------------------------------------------------------------------------
+# 移动端聚合 API：一次请求返回 H5 首页所需的监测、待办与分组概览
+# ---------------------------------------------------------------------------
+@app.route("/api/mobile/summary", methods=["GET"])
+@require_role("viewer")
+def api_mobile_summary():
+    """移动端首页聚合数据（需登录）：最新读数、待办计数、最近告警/通知与分组概览。"""
+    session = _current_session()
+    username = session["username"]
+    user = get_user_by_username(username) or {}
+    pending = get_alerts(status="pending", limit=5)
+    pending_total = len(get_alerts(status="pending", limit=500))
+    notes, unread = get_notifications(username, limit=3, unread_only=True)
+    todo = {"open": 0, "processing": 0}
+    for t in get_tickets(assignee=username, limit=200):
+        if t.get("status") in todo:
+            todo[t["status"]] += 1
+    return jsonify({
+        "status": "ok",
+        "user": {
+            "username": username,
+            "display_name": user.get("display_name") or username,
+            "role": session["role"],
+        },
+        "latest": get_latest(),
+        "pending": {"total": pending_total, "items": pending},
+        "notifications": {"unread": unread, "items": notes},
+        "tickets": todo,
+        "groups": get_group_stats(),
+    })
+
+
 @app.route("/api/alert-rules", methods=["GET"])
 def api_alert_rules_list():
     """告警规则列表。"""

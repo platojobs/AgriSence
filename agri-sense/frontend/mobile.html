@@ -8,10 +8,17 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet" />
   <style>
     * { -webkit-tap-highlight-color: transparent; }
-    body { background: #f0f4f1; font-family: -apple-system, "PingFang SC", sans-serif; padding-bottom: 80px; }
+    body { background: #f0f4f1; font-family: -apple-system, "PingFang SC", sans-serif; padding-bottom: 80px; overflow-x: hidden; }
     .m-header { background: linear-gradient(135deg, #2e7d32, #43a047); color: #fff; padding: 18px 16px; border-radius: 0 0 20px 20px; }
-    .m-header h1 { font-size: 18px; margin: 0; }
+    .m-header h1 { font-size: 17px; margin: 0; white-space: nowrap; }
     .m-header .sub { font-size: 12px; opacity: .85; }
+    .m-user { background: rgba(255,255,255,.2); border-radius: 20px; padding: 4px 10px; font-size: 11px; white-space: nowrap; max-width: 118px; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+    .quick-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+    .quick-item { background: rgba(255,255,255,.16); border-radius: 12px; padding: 10px 4px; text-align: center; color: #fff; text-decoration: none; }
+    .quick-item .num { display: block; font-size: 20px; font-weight: 700; line-height: 1.2; }
+    .quick-item .lbl { font-size: 11px; opacity: .9; }
+    .login-tip { margin: 12px; padding: 10px 14px; background: #fff8e1; border-radius: 12px; font-size: 12px; color: #8d6e00; display: flex; align-items: center; gap: 6px; }
+    .login-tip a { margin-left: auto; font-weight: 600; color: #2e7d32; text-decoration: none; }
     .m-card { background: #fff; border-radius: 14px; padding: 16px; margin: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.05); }
     .m-card h6 { font-size: 14px; color: #555; margin-bottom: 10px; }
     .moisture-ring { position: relative; width: 140px; height: 140px; margin: 0 auto; }
@@ -23,6 +30,9 @@
     .env-item { background: #f6f8f6; border-radius: 10px; padding: 12px; text-align: center; }
     .env-item .lbl { font-size: 11px; color: #888; }
     .env-item .val { font-size: 20px; font-weight: 600; color: #2e7d32; margin-top: 2px; }
+    .group-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-top: 8px; }
+    .group-chip { flex: 0 0 auto; background: #f6f8f6; border-radius: 10px; padding: 8px 14px; font-size: 11px; color: #888; text-decoration: none; text-align: center; }
+    .group-chip b { display: block; font-size: 16px; color: #2e7d32; }
     .btn-irrigate { background: linear-gradient(135deg, #1976d2, #42a5f5); color: #fff; border: none; border-radius: 14px; padding: 18px; width: 100%; font-size: 18px; font-weight: 600; box-shadow: 0 4px 12px rgba(25,118,210,.3); }
     .btn-irrigate:active { transform: scale(.98); }
     .btn-irrigate:disabled { opacity: .6; }
@@ -34,8 +44,15 @@
     .alert-dot.info { background: #2196f3; }
     .alert-msg { font-size: 13px; color: #333; flex: 1; }
     .alert-time { font-size: 11px; color: #aaa; }
-    .m-footer { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; padding: 10px 16px; display: flex; justify-content: space-around; box-shadow: 0 -2px 8px rgba(0,0,0,.06); }
-    .m-footer a { color: #888; text-align: center; font-size: 11px; text-decoration: none; }
+    .btn-mini { border: 1px solid #a5d6a7; background: #fff; color: #2e7d32; border-radius: 8px; font-size: 11px; padding: 3px 8px; }
+    .note-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+    .note-item:last-child { border-bottom: none; }
+    .note-item .t { font-size: 13px; color: #333; }
+    .note-item .c { font-size: 11px; color: #999; margin-top: 2px; }
+    .note-item .dot { width: 6px; height: 6px; border-radius: 50%; background: #f44336; margin-top: 6px; flex-shrink: 0; }
+    .note-item.read .dot { background: #e0e0e0; }
+    .m-footer { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; padding: 10px 8px; display: flex; justify-content: space-around; box-shadow: 0 -2px 8px rgba(0,0,0,.06); }
+    .m-footer a { color: #888; text-align: center; font-size: 11px; text-decoration: none; flex: 1; }
     .m-footer a.active { color: #2e7d32; }
     .m-footer i { display: block; font-size: 20px; margin-bottom: 2px; }
     .status-line { font-size: 12px; display: flex; align-items: center; gap: 6px; margin-top: 6px; }
@@ -47,8 +64,29 @@
 <body>
 
   <div class="m-header">
-    <h1><i class="bi bi-flower1"></i> AgriSense 智慧农业</h1>
-    <div class="sub">一号大棚 · 实时监测</div>
+    <div class="d-flex justify-content-between align-items-start">
+      <div>
+        <h1><i class="bi bi-flower1"></i> AgriSense 智慧农业</h1>
+        <div class="sub">一号大棚 · 实时监测</div>
+      </div>
+      <div class="m-user" id="m-user-name">访客模式</div>
+    </div>
+    <div class="quick-grid">
+      <a class="quick-item" href="alerts.html">
+        <span class="num" id="q-alerts">--</span><span class="lbl">待处理告警</span>
+      </a>
+      <a class="quick-item" href="notifications.html">
+        <span class="num" id="q-notes">--</span><span class="lbl">未读通知</span>
+      </a>
+      <a class="quick-item" href="tickets.html">
+        <span class="num" id="q-tickets">--</span><span class="lbl">我的待办</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="login-tip" id="login-tip" style="display: none;">
+    <i class="bi bi-person-lock"></i> 当前为访客模式，登录后可查看通知、工单与分组统计
+    <a href="login.html">去登录</a>
   </div>
 
   <!-- 土壤墒情 -->
@@ -80,6 +118,13 @@
       <div class="env-item"><div class="lbl">光照强度</div><div class="val" id="env-light">--lux</div></div>
       <div class="env-item"><div class="lbl">执行器</div><div class="val" id="env-act">--</div></div>
     </div>
+    <div id="group-box" style="display: none;">
+      <div class="d-flex justify-content-between align-items-center mt-3">
+        <small class="text-muted">分组概览</small>
+        <a href="groups.html" class="small text-decoration-none text-success">查看分组</a>
+      </div>
+      <div class="group-chips" id="group-chips"></div>
+    </div>
   </div>
 
   <!-- 一键灌溉 -->
@@ -93,18 +138,33 @@
 
   <!-- 告警 -->
   <div class="m-card">
-    <h6><i class="bi bi-bell"></i> 最新告警</h6>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h6 class="mb-0"><i class="bi bi-bell"></i> 最新告警</h6>
+      <a href="alerts.html" class="small text-decoration-none text-success">查看全部</a>
+    </div>
     <div id="alert-list">
       <div class="text-muted text-center py-3 small">暂无告警</div>
     </div>
+  </div>
+
+  <!-- 我的通知 -->
+  <div class="m-card" id="notes-card" style="display: none;">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h6 class="mb-0"><i class="bi bi-bell-fill"></i> 我的通知
+        <span class="badge bg-danger ms-1" id="notes-unread">0</span>
+      </h6>
+      <button class="btn btn-sm btn-outline-secondary" id="btn-read-all">全部已读</button>
+    </div>
+    <div id="note-list"></div>
   </div>
 
   <!-- 底部导航 -->
   <div class="m-footer">
     <a class="active" href="#"><i class="bi bi-house"></i>首页</a>
     <a href="realtime.html"><i class="bi bi-activity"></i>监测</a>
-    <a href="irrigation.html"><i class="bi bi-water"></i>灌溉</a>
     <a href="alerts.html"><i class="bi bi-bell"></i>告警</a>
+    <a href="tickets.html"><i class="bi bi-clipboard2-check"></i>工单</a>
+    <a href="notifications.html"><i class="bi bi-envelope"></i>通知</a>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
@@ -112,39 +172,131 @@
     const API_BASE = "http://localhost:5001";
     const CIRC = 2 * Math.PI * 60; // 376.99
 
+    const TOKEN = localStorage.getItem("agri_token") || "";
+    let USER = null;
+    try { USER = JSON.parse(localStorage.getItem("agri_user") || "null"); } catch (e) { USER = null; }
+    const loggedIn = !!TOKEN;
+    if (loggedIn) $.ajaxSetup({ headers: { "X-Auth-Token": TOKEN } });
+
+    const ROLE_LABELS = { admin: "管理员", operator: "操作员", viewer: "访客" };
+
     function fmtTime(t) {
-      if (!t) return "--";
-      return t.replace("T", " ").slice(0, 16);
+      if (t === null || t === undefined || t === "") return "--";
+      if (typeof t === "number") {
+        const d = new Date(t * 1000);
+        const p = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+      }
+      return String(t).replace("T", " ").slice(0, 16);
     }
 
-    function loadLatest() {
-      $.get(API_BASE + "/api/sensors/latest", function (d) {
-        if (!d) return;
-        const m = d.soil_moisture ?? 0;
-        $("#moisture-num").text(m.toFixed(1));
-        $("#moisture-arc").attr("stroke-dashoffset", CIRC * (1 - m / 100));
-        $("#env-temp").text((d.temperature ?? "--") + "°C");
-        $("#env-humi").text((d.humidity ?? "--") + "%");
-        $("#env-light").text((d.light ?? "--") + "lux");
-        $("#update-time").text(fmtTime(d.timestamp));
-      });
+    function renderLatest(d) {
+      if (!d) return;
+      const m = d.soil_moisture ?? 0;
+      $("#moisture-num").text(m.toFixed(1));
+      $("#moisture-arc").attr("stroke-dashoffset", CIRC * (1 - m / 100));
+      $("#env-temp").text((d.temperature ?? "--") + "°C");
+      $("#env-humi").text((d.humidity ?? "--") + "%");
+      $("#env-light").text((d.light ?? "--") + "lux");
+      $("#update-time").text(fmtTime(d.timestamp));
+      $("#conn-dot").removeClass("dot-offline").addClass("dot-online");
+    }
+
+    function renderAlerts(list, canHandle) {
+      const items = list || [];
+      if (items.length === 0) {
+        $("#alert-list").html('<div class="text-muted text-center py-3 small">暂无告警</div>');
+        return;
+      }
+      $("#alert-list").html(items.slice(0, 5).map((a) => `
+        <div class="alert-item">
+          <span class="alert-dot ${a.level || "info"}"></span>
+          <div class="alert-msg">${a.message || ""}</div>
+          ${canHandle ? `<button class="btn-mini me-2 btn-m-handle" data-id="${a.id}">处理</button>` : ""}
+          <div class="alert-time">${(a.created_at || "").slice(11, 16)}</div>
+        </div>
+      `).join(""));
+    }
+
+    function renderNotes(data) {
+      $("#notes-unread").text(data.unread || 0);
+      const items = data.items || [];
+      $("#note-list").html(items.length ? items.map((n) => `
+        <div class="note-item" data-id="${n.id}">
+          <span class="dot"></span>
+          <div class="flex-grow-1">
+            <div class="t">${n.title || "通知"}</div>
+            <div class="c">${n.content || ""}</div>
+            <div class="c">${fmtTime(n.created_at)}</div>
+          </div>
+        </div>
+      `).join("") : '<div class="text-muted text-center py-3 small">暂无未读通知</div>');
+    }
+
+    function renderGroups(g) {
+      if (!g) return;
+      $("#group-box").show();
+      $("#group-chips").html(`
+        <a class="group-chip" href="groups.html">分组<b>${g.groups ?? 0}</b></a>
+        <a class="group-chip" href="devices.html">设备<b>${g.devices ?? 0}</b></a>
+        <a class="group-chip" href="devices.html">在线<b>${g.online ?? 0}</b></a>
+        <a class="group-chip" href="devices.html">未分组<b>${g.ungrouped ?? 0}</b></a>
+      `);
+    }
+
+    function loadActuator() {
       $.get(API_BASE + "/api/actuators", function (acts) {
         const irr = (acts || []).find((a) => a.name === "irrigation_valve");
         $("#env-act").text(irr && irr.status === "on" ? "灌溉中" : "待机");
       });
-      $.get(API_BASE + "/api/alerts?status=pending", function (alerts) {
-        const list = alerts || [];
-        if (list.length === 0) {
-          $("#alert-list").html('<div class="text-muted text-center py-3 small">暂无告警</div>');
-          return;
+    }
+
+    // 登录态：一次请求拿到监测 + 待办 + 分组概览
+    function loadSummary() {
+      $.get(API_BASE + "/api/mobile/summary", function (d) {
+        $("#m-user-name").text((d.user.display_name || d.user.username) + " · " + (ROLE_LABELS[d.user.role] || ""));
+        $("#q-alerts").text(d.pending.total);
+        $("#q-notes").text(d.notifications.unread);
+        $("#q-tickets").text((d.tickets.open || 0) + (d.tickets.processing || 0));
+        renderLatest(d.latest);
+        renderAlerts(d.pending.items, true);
+        renderNotes(d.notifications);
+        renderGroups(d.groups);
+        $("#notes-card").show();
+        $("#login-tip").hide();
+      }).fail(function (xhr) {
+        if (xhr.status === 401) {
+          localStorage.removeItem("agri_token");
+          localStorage.removeItem("agri_user");
+          location.reload();
         }
-        $("#alert-list").html(list.slice(0, 5).map((a) => `
-          <div class="alert-item">
-            <span class="alert-dot ${a.level || 'info'}"></span>
-            <div class="alert-msg">${a.message || ''}</div>
-            <div class="alert-time">${(a.created_at || '').slice(11, 16)}</div>
-          </div>
-        `).join(""));
+      });
+    }
+
+    // 访客态：公开接口兜底
+    function loadPublic() {
+      $("#login-tip").show();
+      $.get(API_BASE + "/api/sensors/latest", function (d) {
+        if (d) renderLatest(d);
+        else $("#conn-dot").removeClass("dot-online").addClass("dot-offline");
+      });
+      $.get(API_BASE + "/api/alerts?status=pending", function (list) {
+        $("#q-alerts").text((list || []).length);
+        renderAlerts(list, false);
+      });
+    }
+
+    function handleAlert(id) {
+      $.post(API_BASE + "/api/alerts/" + id + "/handle", function () {
+        loadSummary();
+      }).fail(function (xhr) {
+        alert((xhr.responseJSON && xhr.responseJSON.message) || "操作失败，请先登录");
+      });
+    }
+
+    function markRead(id) {
+      $.post(API_BASE + "/api/notifications/" + id + "/read", function () {
+        loadSummary();
       });
     }
 
@@ -177,9 +329,26 @@
     }
 
     $(function () {
-      loadLatest();
-      setInterval(loadLatest, 5000);
+      if (USER) {
+        $("#m-user-name").text((USER.display_name || USER.username || "") + " · " + (ROLE_LABELS[USER.role] || ""));
+      }
+      (loggedIn ? loadSummary : loadPublic)();
+      loadActuator();
+      setInterval(function () { loggedIn ? loadSummary() : loadPublic(); }, 15000);
+      setInterval(loadActuator, 5000);
+
       $("#btn-irrigate").on("click", irrigate);
+      $("#btn-read-all").on("click", function () {
+        $.post(API_BASE + "/api/notifications/read_all", function () {
+          loadSummary();
+        });
+      });
+      $(document).on("click", ".btn-m-handle", function () {
+        handleAlert(parseInt($(this).data("id"), 10));
+      });
+      $(document).on("click", ".note-item", function () {
+        markRead(parseInt($(this).data("id"), 10));
+      });
     });
   </script>
 </body>
