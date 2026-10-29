@@ -317,19 +317,59 @@ def init_db():
             conn.execute("ALTER TABLE alert_rules ADD COLUMN trigger_count INTEGER DEFAULT 0")
         if "last_triggered_at" not in rule_cols:
             conn.execute("ALTER TABLE alert_rules ADD COLUMN last_triggered_at TEXT")
+        # sensor_readings 表补充数据来源列（sensor=真实上报 / mock=模拟生成）
+        reading_cols = [r["name"] for r in conn.execute("PRAGMA table_info(sensor_readings)").fetchall()]
+        if "source" not in reading_cols:
+            conn.execute("ALTER TABLE sensor_readings ADD COLUMN source TEXT DEFAULT 'sensor'")
         conn.commit()
 
 
 def insert_reading(device_id, soil_moisture, raw, timestamp,
-                   temperature=None, humidity=None, light=None):
+                   temperature=None, humidity=None, light=None, source="sensor"):
     """插入一条传感器读数（温湿度光照可选）。"""
     with _get_conn() as conn:
         conn.execute(
-            "INSERT INTO sensor_readings (device_id, soil_moisture, temperature, humidity, light, raw, timestamp) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (device_id, soil_moisture, temperature, humidity, light, raw, timestamp)
+            "INSERT INTO sensor_readings (device_id, soil_moisture, temperature, humidity, light, raw, timestamp, source) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (device_id, soil_moisture, temperature, humidity, light, raw, timestamp, source)
         )
         conn.commit()
+
+
+def insert_readings_bulk(rows):
+    """批量插入读数，rows 每项为
+    (device_id, soil_moisture, raw, timestamp, temperature, humidity, light, source)。"""
+    with _get_conn() as conn:
+        conn.executemany(
+            "INSERT INTO sensor_readings (device_id, soil_moisture, raw, timestamp, "
+            "temperature, humidity, light, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            rows,
+        )
+        conn.commit()
+    return len(rows)
+
+
+def get_mock_stats():
+    """模拟数据统计：总数、模拟行数、模拟数据时间范围。"""
+    with _get_conn() as conn:
+        total = conn.execute("SELECT COUNT(*) AS c FROM sensor_readings").fetchone()["c"]
+        mock = conn.execute(
+            "SELECT COUNT(*) AS c FROM sensor_readings WHERE source = 'mock'"
+        ).fetchone()["c"]
+        row = conn.execute(
+            "SELECT MIN(timestamp) AS earliest, MAX(timestamp) AS latest "
+            "FROM sensor_readings WHERE source = 'mock'"
+        ).fetchone()
+    return {"total": total, "mock": mock,
+            "earliest": row["earliest"], "latest": row["latest"]}
+
+
+def delete_mock_readings():
+    """删除全部模拟生成读数，返回删除条数。"""
+    with _get_conn() as conn:
+        cur = conn.execute("DELETE FROM sensor_readings WHERE source = 'mock'")
+        conn.commit()
+    return cur.rowcount
 
 
 def get_latest():

@@ -31,6 +31,7 @@ const NAV_ITEMS = [
   { key: "audit", label: "审计日志", icon: "bi-journal-check", href: "audit.html" },
   { key: "settings", label: "系统设置", icon: "bi-gear", href: "settings.html" },
   { key: "maintenance", label: "数据维护", icon: "bi-database-gear", href: "maintenance.html" },
+  { key: "mockdata", label: "模拟数据", icon: "bi-magic", href: "mockdata.html" },
   { section: "支持" },
   { key: "about", label: "关于我们", icon: "bi-info-circle", href: "about.html" },
   { key: "service", label: "客服中心", icon: "bi-headset", href: "service.html" },
@@ -62,7 +63,7 @@ function buildSidebar(activeKey) {
   });
 
   html += '</nav>';
-  html += '<div class="sidebar-footer">v3.8.0 &copy; 2010 AgriSense<br><a href="mobile.html" target="_blank" class="text-light"><i class="bi bi-phone"></i> 移动端</a></div>';
+  html += '<div class="sidebar-footer">v3.9.0 &copy; 2010 AgriSense<br><a href="mobile.html" target="_blank" class="text-light"><i class="bi bi-phone"></i> 移动端</a></div>';
   html += '</aside>';
   return html;
 }

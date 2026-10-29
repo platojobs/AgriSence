@@ -10,6 +10,7 @@ import hashlib
 import functools
 import io
 import csv
+import math
 import os
 import random
 import threading
@@ -27,6 +28,7 @@ from config import (
 )
 from database import (
     init_db, insert_reading, get_latest, get_history, get_recent_readings,
+    insert_readings_bulk, get_mock_stats, delete_mock_readings,
     insert_irrigation_log, get_recent_logs,
     get_devices, get_device, upsert_device, delete_device,
     insert_group, get_groups, get_group, update_group, delete_group,
@@ -2120,6 +2122,114 @@ def api_cms_site_delete(key):
     delete_site_content(key)
     _audit("cms_site_delete", target=key, detail="删除站点内容")
     return jsonify({"status": "ok"})
+
+
+# ---------------------------------------------------------------------------
+# 模拟数据发生器：为报表/大屏演示批量生成带昼夜规律的历史读数
+# ---------------------------------------------------------------------------
+def _mock_row_count(days, interval):
+    """按天数与采样间隔估算行数。"""
+    return int(days * 24 * 60 / interval)
+
+
+def _build_mock_rows(device_id, days, interval):
+    """生成带温度昼夜曲线、光照日照曲线与墒情灌溉补水的模拟读数。"""
+    now = int(time.time())
+    step = interval * 60
+    count = _mock_row_count(days, interval)
+    start = now - count * step
+    rows = []
+    soil = 58.0
+    for i in range(count):
+        ts = start + i * step
+        local = time.localtime(ts)
+        hour = local.tm_hour + local.tm_min / 60.0
+        # 温度：凌晨 5 点最低约 15℃，午后 14 点最高约 30℃
+        temperature = 22.5 + 7.5 * math.sin(2 * math.pi * (hour - 9) / 24) \
+            + random.uniform(-0.6, 0.6)
+        # 湿度与温度反向变化
+        humidity = 72 - 24 * math.sin(2 * math.pi * (hour - 9) / 24) \
+            + random.uniform(-3, 3)
+        humidity = round(min(99.0, max(20.0, humidity)), 1)
+        # 光照：6:00-18:00 正弦分布，夜间为 0
+        if 6 <= hour <= 18:
+            light = int(55000 * math.sin(math.pi * (hour - 6) / 12)
+                        + random.uniform(-800, 800))
+            light = max(0, light)
+        else:
+            light = 0
+        # 墒情：缓慢下降，低于 30% 时模拟一次灌溉补水
+        soil -= random.uniform(0.15, 0.45)
+        if soil < 30:
+            soil += random.uniform(10, 18)
+        soil = round(min(85.0, max(18.0, soil)), 1)
+        rows.append((
+            device_id, soil, int(soil * 4095 / 100), ts,
+            round(temperature, 1), humidity, light, "mock",
+        ))
+    return rows
+
+
+def _mock_params(data):
+    """解析并校验生成参数，返回 (days, interval)；非法时抛 ValueError。"""
+    days = int(data.get("days", 7))
+    interval = int(data.get("interval", 30))
+    if not 1 <= days <= 30:
+        raise ValueError("天数需在 1-30 之间")
+    if interval not in (5, 10, 15, 30, 60):
+        raise ValueError("采样间隔仅支持 5/10/15/30/60 分钟")
+    return days, interval
+
+
+@app.route("/api/mock/preview", methods=["GET"])
+@require_role("viewer")
+def api_mock_preview():
+    """生成前预估行数与时间范围。query: days / interval"""
+    try:
+        days, interval = _mock_params(request.args)
+    except (TypeError, ValueError) as e:
+        return jsonify({"status": "error", "message": str(e) or "参数错误"}), 400
+    count = _mock_row_count(days, interval)
+    now = int(time.time())
+    return jsonify({"status": "ok", "rows": count,
+                    "from": now - count * interval * 60, "to": now})
+
+
+@app.route("/api/mock/stats", methods=["GET"])
+@require_role("viewer")
+def api_mock_stats():
+    """模拟数据统计：总读数 / 模拟行数 / 时间范围。"""
+    return jsonify({"status": "ok", **get_mock_stats()})
+
+
+@app.route("/api/mock/generate", methods=["POST"])
+@require_role("admin")
+def api_mock_generate():
+    """生成模拟历史读数。body: {days, interval, device_id}"""
+    data = request.get_json(silent=True) or request.form
+    try:
+        days, interval = _mock_params(data)
+    except (TypeError, ValueError) as e:
+        return jsonify({"status": "error", "message": str(e) or "参数错误"}), 400
+    device_id = (data.get("device_id") or "").strip()
+    if not device_id:
+        devices = get_devices()
+        device_id = devices[0]["device_id"] if devices else "esp32_001"
+    rows = _build_mock_rows(device_id, days, interval)
+    inserted = insert_readings_bulk(rows)
+    _audit("mock_generate", target=device_id,
+           detail="生成 %d 天 / %d 分钟间隔模拟读数 %d 条" % (days, interval, inserted))
+    return jsonify({"status": "ok", "inserted": inserted, "device_id": device_id,
+                    "from": rows[0][3], "to": rows[-1][3]})
+
+
+@app.route("/api/mock/clear", methods=["POST"])
+@require_role("admin")
+def api_mock_clear():
+    """清空模拟读数（仅删除 source=mock 的行，不影响真实上报数据）。"""
+    removed = delete_mock_readings()
+    _audit("mock_clear", target="sensor_readings", detail="清空模拟读数 %d 条" % removed)
+    return jsonify({"status": "ok", "removed": removed})
 
 
 # ---------------------------------------------------------------------------
