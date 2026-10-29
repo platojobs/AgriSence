@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { key: "knowledge", label: "农业知识库", icon: "bi-book", href: "knowledge.html" },
   { key: "news", label: "农业新闻", icon: "bi-newspaper", href: "news.html" },
   { section: "系统" },
+  { key: "profile", label: "个人中心", icon: "bi-person-circle", href: "profile.html" },
   { key: "users", label: "用户管理", icon: "bi-people", href: "users.html" },
   { section: "支持" },
   { key: "about", label: "关于我们", icon: "bi-info-circle", href: "about.html" },
@@ -53,7 +54,7 @@ function buildSidebar(activeKey) {
   });
 
   html += '</nav>';
-  html += '<div class="sidebar-footer">v2.4.0 &copy; 2010 AgriSense<br><a href="mobile.html" target="_blank" class="text-light"><i class="bi bi-phone"></i> 移动端</a></div>';
+  html += '<div class="sidebar-footer">v2.8.0 &copy; 2010 AgriSense<br><a href="mobile.html" target="_blank" class="text-light"><i class="bi bi-phone"></i> 移动端</a></div>';
   html += '</aside>';
   return html;
 }

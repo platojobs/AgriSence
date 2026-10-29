@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>个人中心 - AgriSense</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet" />
+  <link href="css/style.css" rel="stylesheet" />
+  <link href="css/layout.css" rel="stylesheet" />
+  <style>
+    .profile-hero { display: flex; align-items: center; gap: 18px; }
+    .profile-avatar {
+      width: 64px; height: 64px; border-radius: 50%;
+      background: #e8f5e9; color: #2e7d32;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 30px;
+    }
+    .profile-name { font-size: 18px; font-weight: 700; }
+    .role-pill { font-size: 11px; padding: 2px 9px; border-radius: 10px; }
+    .role-admin { background: #e8f5e9; color: #2e7d32; }
+    .role-operator { background: #e3f2fd; color: #1565c0; }
+    .role-viewer { background: #f3f4f6; color: #6b7280; }
+    .profile-meta { font-size: 12px; color: #8a938d; margin-top: 4px; }
+    .info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed #e6ebe7; font-size: 13px; }
+    .info-row:last-child { border-bottom: none; }
+    .info-row .k { color: #7c857f; }
+    .h-table td { vertical-align: middle; font-size: 13px; }
+    .h-table th { font-size: 12px; color: #7c857f; font-weight: 600; }
+    .log-ok { background: #e8f5e9; color: #2e7d32; font-size: 11px; padding: 2px 9px; border-radius: 10px; }
+    .log-fail { background: #fdeaea; color: #c0392b; font-size: 11px; padding: 2px 9px; border-radius: 10px; }
+    .ua-text { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
+    .perm-panel { max-width: 480px; margin: 80px auto; text-align: center; }
+    .card-title { font-size: 15px; font-weight: 700; margin-bottom: 14px; }
+    .card-title i { color: #2e7d32; margin-right: 6px; }
+    .pwd-alert { font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div id="app-root">
+
+    <!-- 未登录提示 -->
+    <div id="perm-box" class="perm-panel d-none">
+      <i class="bi bi-person-lock" style="font-size:52px;color:#c5cec8"></i>
+      <h4 class="mt-3">请先登录</h4>
+      <p class="text-muted">个人中心需要登录后才能访问。</p>
+      <a class="btn btn-success px-4" href="login.html?redirect=profile.html">
+        <i class="bi bi-box-arrow-in-right"></i> 去登录
+      </a>
+    </div>
+
+    <div id="profile-box" class="d-none">
+
+      <!-- 个人信息 -->
+      <div class="row g-3 mb-4">
+        <div class="col-lg-5">
+          <div class="sensor-card h-100">
+            <div class="profile-hero">
+              <div class="profile-avatar"><i class="bi bi-person-fill"></i></div>
+              <div>
+                <div class="profile-name">
+                  <span id="p-name">--</span>
+                  <span class="role-pill" id="p-role">--</span>
+                </div>
+                <div class="profile-meta">@<span id="p-username">--</span></div>
+              </div>
+            </div>
+            <hr />
+            <div class="info-row"><span class="k"><i class="bi bi-person-badge"></i> 用户名</span><span id="p-username2">--</span></div>
+            <div class="info-row"><span class="k"><i class="bi bi-clock-history"></i> 最近登录</span><span id="p-lastlogin">--</span></div>
+            <div class="info-row"><span class="k"><i class="bi bi-calendar-plus"></i> 注册时间</span><span id="p-created">--</span></div>
+            <div class="info-row"><span class="k"><i class="bi bi-shield-check"></i> 账号状态</span><span id="p-status">--</span></div>
+          </div>
+        </div>
+
+        <!-- 修改密码 -->
+        <div class="col-lg-7">
+          <div class="sensor-card h-100">
+            <div class="card-title"><i class="bi bi-key"></i>修改密码</div>
+            <div class="alert alert-danger py-2 d-none pwd-alert" id="pwd-alert"></div>
+            <div class="alert alert-success py-2 d-none pwd-alert" id="pwd-ok"></div>
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label">原密码</label>
+                <input type="password" class="form-control form-control-sm" id="pwd-old" placeholder="请输入当前密码" />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">新密码</label>
+                <input type="password" class="form-control form-control-sm" id="pwd-new" placeholder="至少 6 个字符" />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">确认新密码</label>
+                <input type="password" class="form-control form-control-sm" id="pwd-new2" placeholder="再次输入新密码" />
+              </div>
+              <div class="col-12">
+                <button class="btn btn-success btn-sm" id="pwd-submit">
+                  <i class="bi bi-check2"></i> 确认修改
+                </button>
+                <small class="text-muted ms-2">修改成功后建议重新登录</small>
+              </div>
+            </div>
+            <hr />
+            <div class="card-title"><i class="bi bi-phone"></i>会话管理</div>
+            <p class="text-muted" style="font-size:13px">
+              如果你的账号曾在其他设备登录，可一键退出除当前浏览器外的所有会话。
+            </p>
+            <button class="btn btn-outline-danger btn-sm" id="btn-logout-others">
+              <i class="bi bi-box-arrow-right"></i> 退出其他设备
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 登录历史 -->
+      <div class="sensor-card">
+        <div class="card-title"><i class="bi bi-clock-history"></i>登录历史<small class="text-muted fw-normal ms-2">最近 20 条</small></div>
+        <div class="table-responsive">
+          <table class="table table-hover h-table mb-0">
+            <thead>
+              <tr>
+                <th style="width:170px">时间</th>
+                <th style="width:130px">IP 地址</th>
+                <th>设备 / 浏览器</th>
+                <th style="width:90px">结果</th>
+              </tr>
+            </thead>
+            <tbody id="log-tbody">
+              <tr><td colspan="4" class="text-center text-muted py-4">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>window.PAGE_CONFIG = { key: "profile", title: "个人中心", icon: "bi-person-circle" };</script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/dashboard.js?v=4"></script>
+  <script src="js/profile.js?v=1"></script>
+  <script src="js/layout.js?v=7"></script>
+</body>
+</html>

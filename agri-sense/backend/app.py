@@ -41,6 +41,7 @@ from database import (
     get_site_content, list_site_contents, upsert_site_content, delete_site_content,
     get_users, get_user, get_user_by_username, create_user, update_user, delete_user,
     touch_user_login, create_session, get_session, delete_session, clean_expired_sessions,
+    insert_login_log, get_login_logs, update_user_password, delete_other_sessions,
     get_environment_daily, get_irrigation_stats, get_alert_stats,
     get_farm_activity_stats, get_batch_stats,
 )
@@ -220,18 +221,22 @@ def api_login():
 
     user = get_user_by_username(username)
     if not user:
+        insert_login_log(username, request.remote_addr, request.headers.get("User-Agent", ""), False)
         return jsonify({"status": "error", "message": "用户名或密码错误"}), 401
     if user.get("status") != "active":
+        insert_login_log(username, request.remote_addr, request.headers.get("User-Agent", ""), False)
         return jsonify({"status": "error", "message": "该账号已被禁用，请联系管理员"}), 403
 
     digest, _ = hash_password(password, user["salt"])
     if digest != user["password_hash"]:
+        insert_login_log(username, request.remote_addr, request.headers.get("User-Agent", ""), False)
         return jsonify({"status": "error", "message": "用户名或密码错误"}), 401
 
     token = uuid.uuid4().hex
     expires_at = int(time.time()) + SESSION_TTL
     create_session(token, username, user["role"], expires_at)
     touch_user_login(username)
+    insert_login_log(username, request.remote_addr, request.headers.get("User-Agent", ""), True)
     clean_expired_sessions()
 
     return jsonify({
@@ -267,6 +272,55 @@ def api_me():
     user.pop("salt", None)
     user["role_label"] = ROLE_LABELS.get(user["role"], user["role"])
     return jsonify({"status": "ok", "user": user})
+
+
+@app.route("/api/auth/change_password", methods=["POST"])
+def api_change_password():
+    """用户本人修改密码。body: {"old_password", "new_password"}"""
+    session = _current_session()
+    if not session:
+        return jsonify({"status": "error", "message": "请先登录"}), 401
+
+    data = request.get_json(silent=True) or request.form
+    old_password = data.get("old_password") or ""
+    new_password = data.get("new_password") or ""
+
+    if len(new_password) < 6:
+        return jsonify({"status": "error", "message": "新密码至少 6 个字符"}), 400
+
+    user = get_user_by_username(session["username"])
+    if not user:
+        return jsonify({"status": "error", "message": "用户不存在"}), 401
+
+    digest, _ = hash_password(old_password, user["salt"])
+    if digest != user["password_hash"]:
+        return jsonify({"status": "error", "message": "原密码不正确"}), 400
+
+    new_hash, new_salt = hash_password(new_password)
+    update_user_password(session["username"], new_hash, new_salt)
+    return jsonify({"status": "ok", "message": "密码修改成功"})
+
+
+@app.route("/api/auth/login_history", methods=["GET"])
+def api_login_history():
+    """当前用户最近 20 条登录记录。"""
+    session = _current_session()
+    if not session:
+        return jsonify({"status": "error", "message": "请先登录"}), 401
+    logs = get_login_logs(session["username"], limit=20)
+    for log in logs:
+        log["success"] = bool(log["success"])
+    return jsonify({"status": "ok", "logs": logs})
+
+
+@app.route("/api/auth/logout_others", methods=["POST"])
+def api_logout_others():
+    """退出当前用户的其他所有会话（保留当前 token）。"""
+    session = _current_session()
+    if not session:
+        return jsonify({"status": "error", "message": "请先登录"}), 401
+    removed = delete_other_sessions(session["username"], session["token"])
+    return jsonify({"status": "ok", "removed": removed})
 
 
 # ---------------------------------------------------------------------------

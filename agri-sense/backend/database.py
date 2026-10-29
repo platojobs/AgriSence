@@ -202,6 +202,17 @@ def init_db():
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # 登录日志表：记录每次登录尝试（成功与失败）
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS login_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT,
+                ip TEXT,
+                user_agent TEXT,
+                success INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         conn.commit()
 
 
@@ -983,6 +994,51 @@ def clean_expired_sessions():
     with _get_conn() as conn:
         conn.execute("DELETE FROM sessions WHERE expires_at < ?", (int(time.time()),))
         conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# 个人中心：登录日志 / 修改密码 / 会话管理
+# ---------------------------------------------------------------------------
+def insert_login_log(username, ip, user_agent, success):
+    """记录一次登录尝试（success 传 0/1）。"""
+    with _get_conn() as conn:
+        conn.execute(
+            "INSERT INTO login_logs (username, ip, user_agent, success) VALUES (?, ?, ?, ?)",
+            (username, ip, user_agent, 1 if success else 0)
+        )
+        conn.commit()
+
+
+def get_login_logs(username, limit=20):
+    """返回指定用户最近 N 条登录日志 list[dict]。"""
+    with _get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, username, ip, user_agent, success, created_at "
+            "FROM login_logs WHERE username = ? ORDER BY id DESC LIMIT ?",
+            (username, limit)
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def update_user_password(username, password_hash, salt):
+    """用户本人修改密码。"""
+    with _get_conn() as conn:
+        conn.execute(
+            "UPDATE users SET password_hash = ?, salt = ? WHERE username = ?",
+            (password_hash, salt, username)
+        )
+        conn.commit()
+
+
+def delete_other_sessions(username, keep_token):
+    """删除该用户除 keep_token 外的所有会话（退出其他设备）。"""
+    with _get_conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM sessions WHERE username = ? AND token != ?",
+            (username, keep_token)
+        )
+        conn.commit()
+        return cur.rowcount
 
 
 # ---------------------------------------------------------------------------
