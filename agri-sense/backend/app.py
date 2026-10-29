@@ -42,6 +42,7 @@ from database import (
     get_users, get_user, get_user_by_username, create_user, update_user, delete_user,
     touch_user_login, create_session, get_session, delete_session, clean_expired_sessions,
     insert_login_log, get_login_logs, update_user_password, delete_other_sessions,
+    insert_audit_log, get_audit_logs, get_audit_stats,
     get_environment_daily, get_irrigation_stats, get_alert_stats,
     get_farm_activity_stats, get_batch_stats,
 )
@@ -192,6 +193,17 @@ def _current_session():
     return get_session(request.headers.get("X-Auth-Token"))
 
 
+def _audit(action, target=None, detail=None):
+    """记录操作审计：自动取当前会话用户与请求 IP（未登录记 anonymous）。
+    审计失败不影响主流程。"""
+    session = _current_session()
+    username = session["username"] if session else "anonymous"
+    try:
+        insert_audit_log(username, action, target, detail, request.remote_addr)
+    except Exception as e:
+        print("audit log error:", e)
+
+
 def require_role(min_role="viewer"):
     """接口权限装饰器：要求登录且角色不低于 min_role。"""
     def decorator(func):
@@ -298,6 +310,7 @@ def api_change_password():
 
     new_hash, new_salt = hash_password(new_password)
     update_user_password(session["username"], new_hash, new_salt)
+    _audit("change_password", target=session["username"], detail="本人修改密码")
     return jsonify({"status": "ok", "message": "密码修改成功"})
 
 
@@ -320,7 +333,27 @@ def api_logout_others():
     if not session:
         return jsonify({"status": "error", "message": "请先登录"}), 401
     removed = delete_other_sessions(session["username"], session["token"])
+    _audit("logout_others", target=session["username"], detail="退出 %d 个会话" % removed)
     return jsonify({"status": "ok", "removed": removed})
+
+
+# ---------------------------------------------------------------------------
+# 操作审计 API（仅管理员）
+# ---------------------------------------------------------------------------
+@app.route("/api/audit_logs", methods=["GET"])
+@require_role("admin")
+def api_audit_logs():
+    """审计日志查询。query: username/action/keyword/limit"""
+    username = request.args.get("username") or None
+    action = request.args.get("action") or None
+    keyword = request.args.get("keyword") or None
+    try:
+        limit = min(int(request.args.get("limit", 100)), 500)
+    except (TypeError, ValueError):
+        limit = 100
+    logs = get_audit_logs(limit=limit, username=username, action=action, keyword=keyword)
+    stats = get_audit_stats()
+    return jsonify({"status": "ok", "logs": logs, "stats": stats})
 
 
 # ---------------------------------------------------------------------------
@@ -356,6 +389,7 @@ def api_user_create():
 
     digest, salt = hash_password(password)
     user_id = create_user(username, digest, salt, data.get("display_name") or username, role)
+    _audit("user_create", target=username, detail="创建用户，角色 %s" % role)
     return jsonify({"status": "ok", "id": user_id})
 
 
@@ -393,6 +427,16 @@ def api_user_update(user_id):
 
     update_user(user_id, role=role, status=status, display_name=display_name,
                 password_hash=password_hash, salt=salt)
+    changes = []
+    if role is not None:
+        changes.append("角色→" + role)
+    if status is not None:
+        changes.append("状态→" + status)
+    if display_name is not None:
+        changes.append("姓名→" + display_name)
+    if password:
+        changes.append("重置密码")
+    _audit("user_update", target=target["username"], detail="、".join(changes) or "无变更")
     return jsonify({"status": "ok"})
 
 
@@ -413,6 +457,7 @@ def api_user_delete(user_id):
         return jsonify({"status": "error", "message": "至少需要保留一个可用管理员"}), 400
 
     delete_user(user_id)
+    _audit("user_delete", target=target["username"], detail="删除用户")
     return jsonify({"status": "ok"})
 
 
@@ -475,6 +520,7 @@ def api_irrigation_manual():
     # 联动灌溉阀门执行器
     valve_status = "on" if action == "start" else "off"
     update_actuator("irrigation_valve", valve_status)
+    _audit("irrigation_manual", target="irrigation_valve", detail=reason)
     return jsonify({"status": "ok", "action": action, "valve": valve_status})
 
 
@@ -500,6 +546,7 @@ def api_thresholds():
 
     current_thresholds["low"] = low
     current_thresholds["high"] = high
+    _audit("thresholds_update", target="irrigation", detail="阈值 %s ~ %s" % (low, high))
     return jsonify({"status": "ok", "low": low, "high": high})
 
 
@@ -561,6 +608,7 @@ def api_device_upsert():
         data.get("status", "offline"),
         data.get("last_seen"),
     )
+    _audit("device_upsert", target=device_id, detail="保存设备「%s」" % data.get("name", device_id))
     return jsonify({"status": "ok"})
 
 
@@ -568,6 +616,7 @@ def api_device_upsert():
 def api_device_delete(device_id):
     """删除设备。"""
     delete_device(device_id)
+    _audit("device_delete", target=device_id, detail="删除设备")
     return jsonify({"status": "ok"})
 
 
@@ -585,6 +634,7 @@ def api_alerts_list():
 def api_alert_handle(alert_id):
     """处理告警。"""
     handle_alert(alert_id)
+    _audit("alert_handle", target="alert#%d" % alert_id, detail="标记告警已处理")
     return jsonify({"status": "ok"})
 
 
@@ -607,6 +657,9 @@ def api_alert_rule_upsert():
             int(data.get("enabled", 1)),
             data.get("id"),
         )
+        _audit("alert_rule_save", target=str(data.get("metric")),
+               detail="%s %s %s（%s）" % (data.get("metric"), data.get("condition"),
+                                          data.get("threshold"), data.get("level", "warning")))
         return jsonify({"status": "ok"})
     except (TypeError, ValueError):
         return jsonify({"status": "error", "message": "参数错误"}), 400
@@ -616,6 +669,7 @@ def api_alert_rule_upsert():
 def api_alert_rule_delete(rule_id):
     """删除告警规则。"""
     delete_alert_rule(rule_id)
+    _audit("alert_rule_delete", target="rule#%d" % rule_id, detail="删除告警规则")
     return jsonify({"status": "ok"})
 
 
@@ -638,6 +692,8 @@ def api_schedule_create():
         int(data.get("duration", 30)),
         int(data.get("enabled", 1)),
     )
+    _audit("schedule_create", target=data.get("name", "定时灌溉"),
+           detail="%s 起 %s 分钟" % (data.get("start_time", "06:00"), data.get("duration", 30)))
     return jsonify({"status": "ok"})
 
 
@@ -652,6 +708,9 @@ def api_schedule_update(schedule_id):
         int(data.get("duration", 30)),
         int(data.get("enabled", 1)),
     )
+    _audit("schedule_update", target="schedule#%d" % schedule_id,
+           detail="%s %s 起 %s 分钟" % (data.get("name", "定时灌溉"),
+                                       data.get("start_time", "06:00"), data.get("duration", 30)))
     return jsonify({"status": "ok"})
 
 
@@ -659,6 +718,7 @@ def api_schedule_update(schedule_id):
 def api_schedule_delete(schedule_id):
     """删除灌溉调度。"""
     delete_schedule(schedule_id)
+    _audit("schedule_delete", target="schedule#%d" % schedule_id, detail="删除灌溉调度")
     return jsonify({"status": "ok"})
 
 
@@ -679,6 +739,7 @@ def api_actuator_control(name):
     if status not in ("on", "off"):
         return jsonify({"status": "error", "message": "status 必须为 on 或 off"}), 400
     update_actuator(name, status)
+    _audit("actuator_control", target=name, detail="切换为 %s" % status)
     return jsonify({"status": "ok", "name": name, "value": status})
 
 
@@ -700,6 +761,8 @@ def api_farm_log_create():
         data.get("description", ""),
         data.get("operator", "系统"),
     )
+    _audit("farm_log_create", target=data.get("type", "其他"),
+           detail=(data.get("description") or "")[:80])
     return jsonify({"status": "ok"})
 
 
@@ -707,6 +770,7 @@ def api_farm_log_create():
 def api_farm_log_delete(log_id):
     """删除农事日志。"""
     delete_farm_log(log_id)
+    _audit("farm_log_delete", target="farm_log#%d" % log_id, detail="删除农事日志")
     return jsonify({"status": "ok"})
 
 
@@ -733,6 +797,7 @@ def api_batch_create():
         data.get("quality_status", "pending"),
         data.get("notes", ""),
     )
+    _audit("batch_create", target=data["batch_no"], detail="创建批次「%s」" % data.get("crop_name", ""))
     return jsonify({"status": "ok"})
 
 
@@ -759,6 +824,7 @@ def api_batch_quality(batch_no):
     """更新批次质检状态。body: {quality_status: pending|qualified|unqualified}"""
     data = request.get_json(silent=True) or request.form
     update_batch_quality(batch_no, data.get("quality_status", "pending"))
+    _audit("batch_quality", target=batch_no, detail="质检状态→%s" % data.get("quality_status", "pending"))
     return jsonify({"status": "ok"})
 
 
@@ -978,6 +1044,7 @@ def api_cms_knowledge_create():
         content,
         data.get("author", "农技专家"),
     )
+    _audit("cms_knowledge_create", target=title, detail="新增知识文章")
     return jsonify({"status": "ok"})
 
 
@@ -993,6 +1060,8 @@ def api_cms_knowledge_update(article_id):
         content=data.get("content"),
         author=data.get("author"),
     )
+    _audit("cms_knowledge_update", target="knowledge#%d" % article_id,
+           detail="更新知识文章「%s」" % (data.get("title") or ""))
     return jsonify({"status": "ok", "article": row})
 
 
@@ -1000,6 +1069,7 @@ def api_cms_knowledge_update(article_id):
 @require_role("admin")
 def api_cms_knowledge_delete(article_id):
     delete_knowledge(article_id)
+    _audit("cms_knowledge_delete", target="knowledge#%d" % article_id, detail="删除知识文章")
     return jsonify({"status": "ok"})
 
 
@@ -1027,6 +1097,7 @@ def api_cms_news_create():
         data.get("source", "AgriSense 资讯"),
         1 if data.get("is_top") else 0,
     )
+    _audit("cms_news_create", target=title, detail="新增新闻")
     return jsonify({"status": "ok"})
 
 
@@ -1046,6 +1117,8 @@ def api_cms_news_update(news_id):
         source=data.get("source"),
         is_top=is_top,
     )
+    _audit("cms_news_update", target="news#%d" % news_id,
+           detail="更新新闻「%s」" % (data.get("title") or ""))
     return jsonify({"status": "ok", "news": row})
 
 
@@ -1053,6 +1126,7 @@ def api_cms_news_update(news_id):
 @require_role("admin")
 def api_cms_news_delete(news_id):
     delete_news(news_id)
+    _audit("cms_news_delete", target="news#%d" % news_id, detail="删除新闻")
     return jsonify({"status": "ok"})
 
 
@@ -1061,6 +1135,8 @@ def api_cms_news_delete(news_id):
 def api_cms_news_toggle_top(news_id):
     data = request.get_json(silent=True) or {}
     toggle_news_top(news_id, bool(data.get("is_top")))
+    _audit("cms_news_top", target="news#%d" % news_id,
+           detail="置顶" if data.get("is_top") else "取消置顶")
     return jsonify({"status": "ok"})
 
 
@@ -1082,6 +1158,8 @@ def api_cms_feedback_mark(fb_id):
         data.get("status", "resolved"),
         reply=data.get("reply"),
     )
+    _audit("cms_feedback_mark", target="feedback#%d" % fb_id,
+           detail="留言状态→%s" % data.get("status", "resolved"))
     return jsonify({"status": "ok"})
 
 
@@ -1089,6 +1167,7 @@ def api_cms_feedback_mark(fb_id):
 @require_role("admin")
 def api_cms_feedback_delete(fb_id):
     delete_feedback(fb_id)
+    _audit("cms_feedback_delete", target="feedback#%d" % fb_id, detail="删除留言")
     return jsonify({"status": "ok"})
 
 
@@ -1120,6 +1199,7 @@ def api_cms_site_upsert(key):
     if not title or not content:
         return jsonify({"status": "error", "message": "标题与正文不能为空"}), 400
     upsert_site_content(key, title, content)
+    _audit("cms_site_save", target=key, detail="保存站点内容「%s」" % title)
     return jsonify({"status": "ok"})
 
 
@@ -1127,6 +1207,7 @@ def api_cms_site_upsert(key):
 @require_role("admin")
 def api_cms_site_delete(key):
     delete_site_content(key)
+    _audit("cms_site_delete", target=key, detail="删除站点内容")
     return jsonify({"status": "ok"})
 
 

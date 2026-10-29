@@ -213,6 +213,18 @@ def init_db():
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # 操作审计表：记录后台关键变更操作（谁、做了什么、操作对象）
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT,
+                action TEXT,
+                target TEXT,
+                detail TEXT,
+                ip TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         conn.commit()
 
 
@@ -1039,6 +1051,55 @@ def delete_other_sessions(username, keep_token):
         )
         conn.commit()
         return cur.rowcount
+
+
+# ---------------------------------------------------------------------------
+# 操作审计
+# ---------------------------------------------------------------------------
+def insert_audit_log(username, action, target=None, detail=None, ip=None):
+    """记录一次操作审计。"""
+    with _get_conn() as conn:
+        conn.execute(
+            "INSERT INTO audit_logs (username, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)",
+            (username, action, target, detail, ip)
+        )
+        conn.commit()
+
+
+def get_audit_logs(limit=100, username=None, action=None, keyword=None):
+    """查询审计日志，支持按用户名/动作/关键词过滤，按 id 倒序。"""
+    sql = "SELECT * FROM audit_logs WHERE 1=1"
+    params = []
+    if username:
+        sql += " AND username = ?"
+        params.append(username)
+    if action:
+        sql += " AND action = ?"
+        params.append(action)
+    if keyword:
+        sql += " AND (target LIKE ? OR detail LIKE ?)"
+        params.extend(["%" + keyword + "%", "%" + keyword + "%"])
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(limit)
+    with _get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_audit_stats():
+    """审计统计：总数、今日数、涉及用户数、动作分类数。"""
+    with _get_conn() as conn:
+        total = conn.execute("SELECT COUNT(*) AS c FROM audit_logs").fetchone()["c"]
+        today = conn.execute(
+            "SELECT COUNT(*) AS c FROM audit_logs WHERE date(created_at) = date('now', 'localtime')"
+        ).fetchone()["c"]
+        users = conn.execute(
+            "SELECT COUNT(DISTINCT username) AS c FROM audit_logs"
+        ).fetchone()["c"]
+        actions = conn.execute(
+            "SELECT COUNT(DISTINCT action) AS c FROM audit_logs"
+        ).fetchone()["c"]
+    return {"total": total, "today": today, "users": users, "actions": actions}
 
 
 # ---------------------------------------------------------------------------
