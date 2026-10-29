@@ -1428,6 +1428,19 @@ def api_alert_handle(alert_id):
     return jsonify({"status": "ok"})
 
 
+@app.route("/api/mobile/tickets", methods=["GET"])
+@require_role("viewer")
+def api_mobile_tickets():
+    """移动端工单：指派给我的待办工单 + 未指派的待接单工单。"""
+    session = _current_session()
+    mine = [t for t in get_tickets(assignee=session["username"], limit=100)
+            if t["status"] in ("open", "processing")]
+    unassigned = [t for t in get_tickets(status="open", limit=100)
+                  if not (t.get("assignee") or "").strip()]
+    return jsonify({"status": "ok", "mine": mine, "unassigned": unassigned,
+                    "stats": get_ticket_stats()})
+
+
 # ---------------------------------------------------------------------------
 # 移动端聚合 API：一次请求返回 H5 首页所需的监测、待办与分组概览
 # ---------------------------------------------------------------------------

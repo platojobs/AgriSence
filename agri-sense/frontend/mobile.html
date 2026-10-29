@@ -51,6 +51,19 @@
     .note-item .c { font-size: 11px; color: #999; margin-top: 2px; }
     .note-item .dot { width: 6px; height: 6px; border-radius: 50%; background: #f44336; margin-top: 6px; flex-shrink: 0; }
     .note-item.read .dot { background: #e0e0e0; }
+    .ticket-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f0f0f0; text-decoration: none; color: inherit; }
+    .ticket-item:last-child { border-bottom: none; }
+    .tk-title { font-size: 13px; color: #333; }
+    .tk-meta { font-size: 11px; color: #999; margin-top: 2px; }
+    .tk-badge { font-size: 10px; padding: 2px 6px; border-radius: 6px; }
+    .st-open { background: #fff3e0; color: #e65100; }
+    .st-processing { background: #e3f2fd; color: #1565c0; }
+    .st-resolved { background: #e8f5e9; color: #2e7d32; }
+    .st-closed { background: #eceff1; color: #546e7a; }
+    .tk-chip { font-size: 11px; border: 1px solid #ddd; border-radius: 14px; padding: 4px 12px; color: #666; background: #fff; }
+    .tk-chip.active { background: #2e7d32; border-color: #2e7d32; color: #fff; }
+    .bottom-sheet .modal-dialog { position: fixed; bottom: 0; left: 0; right: 0; margin: 0; max-width: 100%; }
+    .bottom-sheet .modal-content { border-radius: 16px 16px 0 0; }
     .m-footer { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; padding: 10px 8px; display: flex; justify-content: space-around; box-shadow: 0 -2px 8px rgba(0,0,0,.06); }
     .m-footer a { color: #888; text-align: center; font-size: 11px; text-decoration: none; flex: 1; }
     .m-footer a.active { color: #2e7d32; }
@@ -147,6 +160,20 @@
     </div>
   </div>
 
+  <!-- 我的工单 -->
+  <div class="m-card">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h6 class="mb-0"><i class="bi bi-clipboard2-check"></i> 我的工单</h6>
+      <a href="tickets.html" class="small text-decoration-none text-success">工单管理</a>
+    </div>
+    <div class="d-flex gap-2 mb-2" id="ticket-filter-box" style="display: none;">
+      <button class="tk-chip active" data-filter="mine">我的待办</button>
+      <button class="tk-chip" data-filter="unassigned">待接单</button>
+    </div>
+    <div id="ticket-guest" class="text-muted small py-2">登录后可查看并流转指派给您的工单</div>
+    <div id="ticket-list"></div>
+  </div>
+
   <!-- 我的通知 -->
   <div class="m-card" id="notes-card" style="display: none;">
     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -156,6 +183,39 @@
       <button class="btn btn-sm btn-outline-secondary" id="btn-read-all">全部已读</button>
     </div>
     <div id="note-list"></div>
+  </div>
+
+  <!-- 工单详情（底部抽屉） -->
+  <div class="modal fade bottom-sheet" id="ticket-modal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header py-2">
+          <div>
+            <h6 class="mb-0" id="tm-title">工单详情</h6>
+            <small class="text-muted" id="tm-no"></small>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="d-flex gap-2 mb-2">
+            <span class="tk-badge" id="tm-status"></span>
+            <span class="tk-badge bg-light text-dark border" id="tm-priority"></span>
+            <span class="tk-badge bg-light text-dark border" id="tm-type"></span>
+          </div>
+          <div class="small text-muted mb-1" id="tm-meta"></div>
+          <p class="small mb-2" id="tm-desc"></p>
+          <div class="small text-muted" id="tm-resolution"></div>
+          <label class="form-label small mt-2 mb-1">处理说明</label>
+          <textarea class="form-control form-control-sm" id="tm-resolution-input" rows="2"
+            placeholder="标记解决时可填写处理结果"></textarea>
+        </div>
+        <div class="modal-footer py-2">
+          <button class="btn btn-sm btn-outline-success d-none" id="tm-accept">接单</button>
+          <button class="btn btn-sm btn-success d-none" id="tm-resolve">标记解决</button>
+          <button class="btn btn-sm btn-outline-secondary d-none" id="tm-close">关闭</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- 底部导航 -->
@@ -168,6 +228,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     const API_BASE = "http://localhost:5001";
     const CIRC = 2 * Math.PI * 60; // 376.99
@@ -286,6 +347,101 @@
       });
     }
 
+    // ---------- 工单 ----------
+    const TICKET_STATUS = { open: "待处理", processing: "处理中", resolved: "已解决", closed: "已关闭" };
+    const TICKET_PRIORITY = { low: "低", medium: "中", high: "高", urgent: "紧急" };
+    const TICKET_TYPE = { alert: "告警工单", ops: "运维工单", inspect: "巡检工单" };
+    let ticketFilter = "mine";
+    let ticketModal = null;
+    let ticketCache = [];
+    let currentTicket = null;
+
+    function esc(s) {
+      return String(s == null ? "" : s).replace(/[&<>"]/g,
+        (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    }
+
+    function canOperate() {
+      return !!USER && ["operator", "admin"].includes(USER.role);
+    }
+
+    function renderTickets(list) {
+      if (!list || list.length === 0) {
+        const empty = ticketFilter === "mine" ? "暂无待办工单" : "暂无待接单工单";
+        $("#ticket-list").html(`<div class="text-muted text-center py-3 small">${empty}</div>`);
+        return;
+      }
+      $("#ticket-list").html(list.map((t) => `
+        <a class="ticket-item" href="javascript:;" data-id="${t.id}">
+          <div class="flex-grow-1">
+            <div class="tk-title">${esc(t.title)}</div>
+            <div class="tk-meta">${esc(t.ticket_no)} · ${TICKET_PRIORITY[t.priority] || t.priority}优先级 · ${esc(t.assignee || "未指派")}</div>
+          </div>
+          <span class="tk-badge st-${t.status} align-self-center">${TICKET_STATUS[t.status] || t.status}</span>
+        </a>`).join(""));
+    }
+
+    function loadTickets() {
+      if (!loggedIn) return;
+      $.get(API_BASE + "/api/mobile/tickets", function (d) {
+        ticketCache = ticketFilter === "mine" ? (d.mine || []) : (d.unassigned || []);
+        $("#q-tickets").text((d.mine || []).length);
+        renderTickets(ticketCache);
+      });
+    }
+
+    function showTicket(t) {
+      currentTicket = t;
+      $("#tm-title").text(t.title || "工单详情");
+      $("#tm-no").text(t.ticket_no || "");
+      $("#tm-status").attr("class", "tk-badge st-" + t.status)
+        .text(TICKET_STATUS[t.status] || t.status);
+      $("#tm-priority").text("优先级 " + (TICKET_PRIORITY[t.priority] || t.priority || "-"));
+      $("#tm-type").text(TICKET_TYPE[t.type] || t.type || "-");
+      $("#tm-meta").text(`创建人 ${t.creator || "-"} · 指派 ${t.assignee || "未指派"} · ${(t.created_at || "").slice(0, 16)}`);
+      $("#tm-desc").text(t.description || "无描述");
+      $("#tm-resolution").text(t.resolution ? "处理结果：" + t.resolution : "");
+      $("#tm-resolution-input").val(t.resolution || "");
+      const can = canOperate();
+      $("#tm-accept").toggleClass("d-none", !(can && t.status === "open"));
+      $("#tm-resolve").toggleClass("d-none", !(can && ["open", "processing"].includes(t.status)));
+      $("#tm-close").toggleClass("d-none", !(can && t.status !== "closed"));
+      ticketModal.show();
+    }
+
+    function openTicket(id) {
+      const cached = ticketCache.find((t) => t.id === id);
+      if (cached) {
+        showTicket(cached);
+        return;
+      }
+      $.get(API_BASE + "/api/tickets/" + id, function (d) { showTicket(d.ticket); });
+    }
+
+    function transitionTicket(status) {
+      if (!currentTicket) return;
+      const payload = { status: status };
+      if (status === "processing") payload.assignee = USER.username;
+      if (status === "resolved") {
+        const r = $("#tm-resolution-input").val().trim();
+        if (r) payload.resolution = r;
+      }
+      $.ajax({
+        url: API_BASE + "/api/tickets/" + currentTicket.id,
+        method: "PUT",
+        contentType: "application/json",
+        data: JSON.stringify(payload),
+        success: function () {
+          ticketModal.hide();
+          loadTickets();
+          loadSummary();
+        },
+        error: function (xhr) {
+          alert((xhr.responseJSON && xhr.responseJSON.message) || "操作失败（需操作员及以上权限）");
+        },
+      });
+    }
+
     function handleAlert(id) {
       $.post(API_BASE + "/api/alerts/" + id + "/handle", function () {
         loadSummary();
@@ -334,7 +490,15 @@
       }
       (loggedIn ? loadSummary : loadPublic)();
       loadActuator();
-      setInterval(function () { loggedIn ? loadSummary() : loadPublic(); }, 15000);
+      if (loggedIn) {
+        ticketModal = new bootstrap.Modal("#ticket-modal");
+        $("#ticket-filter-box").show();
+        $("#ticket-guest").hide();
+        loadTickets();
+      }
+      setInterval(function () {
+        if (loggedIn) { loadSummary(); loadTickets(); } else { loadPublic(); }
+      }, 15000);
       setInterval(loadActuator, 5000);
 
       $("#btn-irrigate").on("click", irrigate);
@@ -349,6 +513,18 @@
       $(document).on("click", ".note-item", function () {
         markRead(parseInt($(this).data("id"), 10));
       });
+      $("#ticket-filter-box").on("click", ".tk-chip", function () {
+        $(".tk-chip").removeClass("active");
+        $(this).addClass("active");
+        ticketFilter = $(this).data("filter");
+        loadTickets();
+      });
+      $(document).on("click", ".ticket-item", function () {
+        openTicket(parseInt($(this).data("id"), 10));
+      });
+      $("#tm-accept").on("click", function () { transitionTicket("processing"); });
+      $("#tm-resolve").on("click", function () { transitionTicket("resolved"); });
+      $("#tm-close").on("click", function () { transitionTicket("closed"); });
     });
   </script>
 </body>
